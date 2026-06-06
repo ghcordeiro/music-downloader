@@ -15,10 +15,18 @@ async function init() {
 }
 
 function showWelcome(cfg) {
+  let currentDir = cfg.outputDir;
+  const render = () => { $('#welcomeFolder').textContent = `📁 ${currentDir}`; };
   $('#welcome').hidden = false;
-  $('#welcomeFolder').textContent = `📁 ${cfg.outputDir}`;
+  render();
+
+  $('#welcomeChangeFolder').addEventListener('click', async () => {
+    const r = await window.api.dialog.pickFolder(currentDir);
+    if (r.ok) { currentDir = r.path; render(); }
+  });
+
   $('#welcomeStart').addEventListener('click', async () => {
-    await window.api.config.set({ firstRunCompleted: true });
+    await window.api.config.set({ outputDir: currentDir, firstRunCompleted: true });
     $('#welcome').hidden = true;
     showMain();
   });
@@ -30,6 +38,38 @@ function showMain() {
   initYoutubeTab();
   initSoundcloudTab();
   wireTabSwitching();
+
+  async function refreshSettingsRows() {
+    const cfg = await window.api.config.get();
+    $('#settingsFolder').textContent = cfg.outputDir;
+  }
+
+  $('#settingsBtn').addEventListener('click', async () => {
+    await refreshSettingsRows();
+    $('#settingsDialog').showModal();
+  });
+
+  $('#settingsChangeFolder').addEventListener('click', async () => {
+    const cfg = await window.api.config.get();
+    const r = await window.api.dialog.pickFolder(cfg.outputDir);
+    if (r.ok) {
+      await window.api.config.set({ outputDir: r.path });
+      await refreshSettingsRows();
+    }
+  });
+
+  $('#settingsResetLibrary').addEventListener('click', async () => {
+    if (confirm('Apagar histórico de downloads? Tracks já no disco continuam, mas o app deixará de pular re-downloads.')) {
+      await window.api.library.reset();
+    }
+  });
+
+  window.addEventListener('app:tier3', (e) => {
+    const { userMessage, reference } = e.detail;
+    $('#tier3Message').textContent = userMessage;
+    $('#tier3Reference').textContent = reference || '------';
+    $('#tier3Dialog').showModal();
+  });
 }
 
 function wireTabSwitching() {

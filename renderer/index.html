@@ -13,13 +13,35 @@
         <p>Cada playlist vira uma pasta com as músicas dentro.</p>
         <div class="folder-row">
           <span id="welcomeFolder"></span>
-          <!-- "Mudar" button deferred: hard default in Plan A; settings dialog in Plan C -->
+          <button id="welcomeChangeFolder" type="button">Mudar</button>
         </div>
         <button id="welcomeStart">Começar</button>
       </section>
 
       <!-- Main tab UI -->
       <section id="main" hidden>
+        <header class="appbar">
+          <h1>Music Downloader</h1>
+          <button id="settingsBtn" type="button" title="Configurações">⚙</button>
+        </header>
+
+        <dialog id="settingsDialog">
+          <form method="dialog">
+            <h2>Configurações</h2>
+            <div class="settings-row">
+              <label>Pasta de saída:</label>
+              <span id="settingsFolder"></span>
+              <button id="settingsChangeFolder" type="button">Mudar</button>
+            </div>
+            <div class="settings-row">
+              <button id="settingsResetLibrary" type="button">Resetar histórico de downloads</button>
+            </div>
+            <div class="row-right">
+              <button id="settingsClose" value="close">Fechar</button>
+            </div>
+          </form>
+        </dialog>
+
         <nav class="tabs">
           <button class="tab active" data-tab="spotify">Spotify</button>
           <button class="tab" data-tab="youtube">YouTube</button>
@@ -149,6 +171,16 @@
             <div class="row-right"><button id="soundcloudErrorRetry">Voltar</button></div>
           </div>
         </div>
+
+        <dialog id="tier3Dialog">
+          <h2>Erro inesperado</h2>
+          <p id="tier3Message"></p>
+          <p>Código: <code id="tier3Reference"></code></p>
+          <p style="font-size: 12px; color: #666;">Copie esse código e envie pra quem te passou o app.</p>
+          <div class="row-right">
+            <form method="dialog"><button>Fechar</button></form>
+          </div>
+        </dialog>
       </section>
     </div>
 

@@ -49,3 +49,13 @@ button#previewCancel, button#downloadCancel, button#openFolder, button#errorRetr
 .tab[data-tab="soundcloud"].active { color: #ff5500; border-bottom-color: #ff5500; }
 button#youtubeFetch, button#youtubePreviewStart, button#youtubeAnother { background: #ff0000; color: white; }
 button#soundcloudFetch, button#soundcloudPreviewStart, button#soundcloudAnother { background: #ff5500; color: white; }
+.appbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.appbar h1 { font-size: 18px; margin: 0; }
+#settingsBtn { background: transparent; color: #555; border: 1px solid #ddd; padding: 6px 10px; font-size: 14px; }
+dialog#settingsDialog { border: 1px solid #ddd; border-radius: 8px; padding: 18px; min-width: 360px; }
+dialog#settingsDialog::backdrop { background: rgba(0, 0, 0, 0.2); }
+.settings-row { display: flex; align-items: center; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+.settings-row label { font-size: 12px; color: #555; min-width: 100px; }
+.settings-row span { flex: 1; font-size: 12px; color: #222; }
+dialog#tier3Dialog { border: 1px solid #f0a; border-radius: 8px; padding: 18px; min-width: 360px; }
+dialog#tier3Dialog code { background: #f3f3f3; padding: 4px 8px; border-radius: 4px; font-family: ui-monospace, monospace; }

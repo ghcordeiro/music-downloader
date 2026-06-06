@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld('api', {
   spotify: {
     fetchPlaylist: (url) => ipcRenderer.invoke('spotify:fetch', url),
   },
+  youtube: {
+    fetchPlaylist: (url) => ipcRenderer.invoke('youtube:fetch', url),
+  },
+  soundcloud: {
+    fetchPlaylist: (url) => ipcRenderer.invoke('soundcloud:fetch', url),
+  },
   download: {
     start: (payload) => ipcRenderer.invoke('download:start', payload),
     cancel: () => ipcRenderer.invoke('download:cancel'),

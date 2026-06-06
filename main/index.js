@@ -32,7 +32,7 @@ function createWindow(config) {
 app.whenReady().then(() => {
   const config = createConfig(app.getPath('userData'));
   const window = createWindow(config);
-  registerIpc({ config, window });
+  registerIpc({ config, window, userDataDir: app.getPath('userData') });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(config);

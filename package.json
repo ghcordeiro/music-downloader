@@ -7,7 +7,12 @@
     "start": "electron .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "fetch-binaries": "node scripts/fetch-binaries.js"
+    "fetch-binaries": "node scripts/fetch-binaries.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder --mac --win",
+    "prepare-binaries": "node scripts/fetch-binaries.js --all",
+    "embed-creds": "node scripts/embed-spotify.js"
   },
   "author": "",
   "license": "ISC",
@@ -17,6 +22,7 @@
   },
   "devDependencies": {
     "electron": "^30.0.0",
+    "electron-builder": "^24.13.3",
     "nock": "^13.5.0",
     "vitest": "^1.6.0"
   }

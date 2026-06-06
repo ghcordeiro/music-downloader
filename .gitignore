@@ -3,3 +3,5 @@ songs/
 .env
 .DS_Store
 .superpowers/
+binaries/*/
+!binaries/.gitkeep

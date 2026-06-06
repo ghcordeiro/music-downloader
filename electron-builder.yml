@@ -1,0 +1,48 @@
+appId: com.musicdownloader.app
+productName: Music Downloader
+copyright: Copyright © 2026
+directories:
+  output: dist
+files:
+  - "main/**/*"
+  - "renderer/**/*"
+  - "package.json"
+  - "!**/*.test.js"
+  - "!docs/**/*"
+  - "!tests/**/*"
+  - "!.superpowers/**/*"
+extraResources:
+  - from: "binaries"
+    to: "binaries"
+    filter:
+      - "**/*"
+asar: true
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  category: public.app-category.music
+  icon: assets/icon.icns
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications

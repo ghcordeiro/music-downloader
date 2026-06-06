@@ -8,9 +8,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "fetch-binaries": "node scripts/fetch-binaries.js",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win",
-    "dist": "electron-builder --mac --win",
+    "prebuild": "npm run prepare-binaries && npm run embed-creds",
+    "dist:mac": "npm run prebuild && electron-builder --mac",
+    "dist:win": "npm run prebuild && electron-builder --win",
+    "dist": "npm run prebuild && electron-builder --mac --win",
     "prepare-binaries": "node scripts/fetch-binaries.js --all",
     "embed-creds": "node scripts/embed-spotify.js"
   },

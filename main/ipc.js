@@ -1,5 +1,7 @@
-const { ipcMain } = require('electron');
+const { ipcMain, dialog } = require('electron');
 const path = require('node:path');
+const fsp = require('node:fs/promises');
+const fssync = require('node:fs');
 const { parseSpotifyUrl, createSpotifyClient } = require('./platforms/spotify.js');
 const youtube = require('./platforms/youtube.js');
 const soundcloud = require('./platforms/soundcloud.js');
@@ -19,11 +21,21 @@ function broadcast(win, channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
+function makeLogger(userDataDir) {
+  const logsDir = path.join(userDataDir, 'logs');
+  fssync.mkdirSync(logsDir, { recursive: true });
+  const errFile = path.join(logsDir, `error-${new Date().toISOString().slice(0, 10)}.log`);
+  return (err, ref) => {
+    const line = `${new Date().toISOString()} [${ref || '------'}] ${err?.stack || err?.message || String(err)}\n`;
+    try { fssync.appendFileSync(errFile, line); } catch { /* ignore */ }
+  };
+}
+
 function registerIpc({ config, window, userDataDir }) {
-  const spotifyClient = createSpotifyClient({
-    clientId: process.env.SPOTIFY_CLIENT_ID,
-    clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-  });
+  let creds;
+  try { creds = require('./spotify-creds.js'); }
+  catch { creds = { clientId: process.env.SPOTIFY_CLIENT_ID, clientSecret: process.env.SPOTIFY_CLIENT_SECRET }; }
+  const spotifyClient = createSpotifyClient(creds);
 
   const enrichment = createEnrichment({
     cacheDir: path.join(userDataDir, 'cache', 'musicbrainz'),
@@ -45,8 +57,41 @@ function registerIpc({ config, window, userDataDir }) {
     hashTrack,
   });
 
+  const logError = makeLogger(userDataDir);
+
+  function errorPayload(err) {
+    if (err instanceof errors.AppError && err.code !== 'UNEXPECTED') {
+      return { ok: false, code: err.code, userMessage: err.userMessage };
+    }
+    const wrapped = err instanceof errors.UnexpectedError ? err : new errors.UnexpectedError(err);
+    logError(err, wrapped.reference);
+    return {
+      ok: false,
+      code: wrapped.code,
+      userMessage: wrapped.userMessage,
+      reference: wrapped.reference,
+    };
+  }
+
   ipcMain.handle('config:get', () => config.get());
   ipcMain.handle('config:set', (_e, value) => config.set(value));
+
+  ipcMain.handle('dialog:pickFolder', async (_e, current) => {
+    const result = await dialog.showOpenDialog({
+      defaultPath: current,
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'Onde salvar as músicas?',
+    });
+    if (result.canceled || result.filePaths.length === 0) return { ok: false };
+    return { ok: true, path: result.filePaths[0] };
+  });
+
+  ipcMain.handle('library:reset', async () => {
+    try {
+      await fsp.unlink(path.join(userDataDir, 'library.json'));
+    } catch { /* file may not exist */ }
+    return { ok: true };
+  });
 
   ipcMain.handle('spotify:fetch', async (_e, url) => {
     try {
@@ -109,19 +154,6 @@ function registerIpc({ config, window, userDataDir }) {
     revealInExplorer(target);
     return { ok: true };
   });
-}
-
-function errorPayload(err) {
-  if (err instanceof errors.AppError) {
-    return { ok: false, code: err.code, userMessage: err.userMessage };
-  }
-  const wrapped = new errors.UnexpectedError(err);
-  return {
-    ok: false,
-    code: wrapped.code,
-    userMessage: wrapped.userMessage,
-    reference: wrapped.reference,
-  };
 }
 
 module.exports = { registerIpc };

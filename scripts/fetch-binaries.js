@@ -28,17 +28,40 @@ const FFPROBE = {
 
 function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
 
-function download(url, dest) {
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function download(url, dest, attempts = 4) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await downloadOnce(url, dest);
+      return;
+    } catch (err) {
+      lastError = err;
+      fs.rmSync(dest, { force: true });
+      if (attempt === attempts) break;
+      const delay = attempt * 2000;
+      console.warn(`download failed (${err.message}); retrying in ${delay}ms`);
+      await wait(delay);
+    }
+  }
+  throw lastError;
+}
+
+function downloadOnce(url, dest) {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
     function get(u) {
       https.get(u, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           return get(res.headers.location);
         }
         if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode} for ${u}`));
+        const file = fs.createWriteStream(dest);
         res.pipe(file);
         file.on('finish', () => file.close(() => resolve()));
+        file.on('error', reject);
       }).on('error', reject);
     }
     get(url);

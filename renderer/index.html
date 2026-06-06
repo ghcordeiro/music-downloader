@@ -3,12 +3,75 @@
   <head>
     <meta charset="UTF-8" />
     <title>Music Downloader</title>
-    <style>
-      body { font-family: -apple-system, system-ui, sans-serif; padding: 40px; text-align: center; }
-    </style>
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <h1>Music Downloader</h1>
-    <p>Electron está rodando.</p>
+    <div id="app">
+      <!-- First-run welcome -->
+      <section id="welcome" hidden>
+        <h2>Onde você quer salvar as músicas?</h2>
+        <p>Cada playlist vira uma pasta com as músicas dentro.</p>
+        <div class="folder-row">
+          <span id="welcomeFolder"></span>
+          <!-- "Mudar" button deferred: hard default in Plan A; settings dialog in Plan C -->
+        </div>
+        <button id="welcomeStart">Começar</button>
+      </section>
+
+      <!-- Main tab UI -->
+      <section id="main" hidden>
+        <nav class="tabs">
+          <button class="tab active" data-tab="spotify">Spotify</button>
+        </nav>
+
+        <div class="panel" id="spotifyPanel">
+          <div class="state state-empty" data-state="empty">
+            <p>Cole o link de uma playlist do Spotify:</p>
+            <input id="spotifyUrl" placeholder="https://open.spotify.com/playlist/..." />
+            <div class="row-right"><button id="spotifyFetch">Buscar</button></div>
+          </div>
+
+          <div class="state state-loading" data-state="loading" hidden>
+            <p>Carregando…</p>
+          </div>
+
+          <div class="state state-preview" data-state="preview" hidden>
+            <div class="preview">
+              <img id="previewCover" alt="" />
+              <div>
+                <div id="previewName"></div>
+                <div id="previewMeta"></div>
+              </div>
+            </div>
+            <div class="row-right">
+              <button id="previewCancel">Cancelar</button>
+              <button id="previewStart">Baixar</button>
+            </div>
+          </div>
+
+          <div class="state state-downloading" data-state="downloading" hidden>
+            <div class="bar"><div id="bar" class="bar-fill"></div></div>
+            <div id="counter"></div>
+            <ul id="trackList"></ul>
+            <div class="row-right"><button id="downloadCancel">Cancelar</button></div>
+          </div>
+
+          <div class="state state-done" data-state="done" hidden>
+            <div id="summary"></div>
+            <div class="row-right">
+              <button id="openFolder">Ver pasta</button>
+              <button id="anotherPlaylist">Baixar outra playlist</button>
+            </div>
+          </div>
+
+          <div class="state state-error" data-state="error" hidden>
+            <div id="errorMessage"></div>
+            <div class="row-right"><button id="errorRetry">Voltar</button></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="main.js"></script>
   </body>
 </html>

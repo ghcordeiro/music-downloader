@@ -1,0 +1,47 @@
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  margin: 0; padding: 0; background: #fafafa; color: #222;
+}
+#app { padding: 24px; max-width: 720px; margin: 0 auto; }
+h2 { margin-top: 0; }
+.tabs {
+  display: flex; border-bottom: 1px solid #e5e5e5;
+  margin-bottom: 16px;
+}
+.tab {
+  background: transparent; border: none; padding: 12px 18px;
+  font-size: 13px; color: #777; cursor: pointer;
+  border-bottom: 3px solid transparent; font-weight: 500;
+}
+.tab.active { color: #1db954; border-bottom-color: #1db954; font-weight: 600; }
+.panel { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+input {
+  width: 100%; padding: 10px 12px; border: 1px solid #ccc;
+  border-radius: 5px; font-size: 13px;
+}
+button {
+  padding: 10px 18px; border-radius: 5px; font-size: 13px;
+  border: none; cursor: pointer; font-weight: 600;
+}
+button#spotifyFetch, button#previewStart, button#welcomeStart, button#anotherPlaylist {
+  background: #1db954; color: white;
+}
+button#previewCancel, button#downloadCancel, button#openFolder, button#errorRetry {
+  background: transparent; color: #555; border: 1px solid #ddd;
+}
+.row-right { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.preview { display: flex; gap: 14px; padding: 14px; background: #f8f8f8; border-radius: 6px; margin-bottom: 14px; }
+.preview img { width: 64px; height: 64px; border-radius: 4px; object-fit: cover; background: #ddd; }
+#previewName { font-weight: 600; font-size: 14px; }
+#previewMeta { font-size: 12px; color: #888; margin-top: 2px; }
+.bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+.bar-fill { height: 100%; background: #e8472b; width: 0%; transition: width 0.2s; }
+#trackList { list-style: none; padding: 0; margin: 8px 0; max-height: 240px; overflow-y: auto; font-size: 12px; }
+#trackList li { padding: 4px 0; display: flex; gap: 8px; }
+#trackList .num { color: #888; width: 32px; }
+#trackList .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#trackList .status { width: 18px; text-align: center; }
+.state-done #summary { padding: 16px; background: #f5f5f5; border-radius: 6px; text-align: center; }
+.state-error #errorMessage { padding: 16px; background: #fff4f1; color: #b03a1f; border-radius: 6px; }
+.folder-row { padding: 10px; background: #f5f5f5; border-radius: 6px; margin: 10px 0; }

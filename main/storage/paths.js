@@ -16,10 +16,19 @@ function sanitizeFilename(name) {
     : cleaned;
 }
 
+function getBinaryRoot(opts) {
+  if (opts.root) return opts.root;
+  try {
+    const { app } = require('electron');
+    if (app.isPackaged) return process.resourcesPath;
+  } catch { /* tests / non-electron */ }
+  return path.resolve(__dirname, '..', '..');
+}
+
 function resolveBinary(name, opts = {}) {
   const platform = opts.platform || process.platform;
   const arch = opts.arch || process.arch;
-  const root = opts.root || path.resolve(__dirname, '..', '..');
+  const root = getBinaryRoot(opts);
 
   let dir;
   let binName = name;

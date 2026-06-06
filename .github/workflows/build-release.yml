@@ -80,8 +80,11 @@ jobs:
             echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}"
           } > .env
 
-      - name: Prepare binaries and credentials
-        run: npm run prebuild
+      - name: Fetch macOS binaries (yt-dlp + ffmpeg)
+        run: node scripts/fetch-binaries.js --platform=mac
+
+      - name: Embed credentials
+        run: npm run embed-creds
 
       - name: Build macOS installers
         run: npx electron-builder --mac --publish never
@@ -138,8 +141,11 @@ jobs:
             echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}"
           } > .env
 
-      - name: Prepare binaries and credentials
-        run: npm run prebuild
+      - name: Fetch Windows binaries (yt-dlp + ffmpeg)
+        run: node scripts/fetch-binaries.js --platform=win
+
+      - name: Embed credentials
+        run: npm run embed-creds
 
       - name: Build Windows installer
         run: npx electron-builder --win --x64 --publish never

@@ -138,10 +138,20 @@ async function fetchFfmpeg(target) {
 }
 
 (async () => {
-  const all = process.argv.includes('--all');
+  const argv = process.argv.slice(2);
+  const platformArg = argv.find(a => a.startsWith('--platform='))?.split('=')[1];
+  const all = argv.includes('--all');
+
   let targets;
   if (all) {
     targets = ['mac-arm64', 'mac-x64', 'win-x64'];
+  } else if (platformArg === 'mac') {
+    targets = ['mac-arm64', 'mac-x64'];
+  } else if (platformArg === 'win') {
+    targets = ['win-x64'];
+  } else if (platformArg) {
+    console.error(`unknown --platform value: ${platformArg} (expected "mac" or "win")`);
+    process.exit(1);
   } else {
     targets = [
       process.platform === 'darwin' && process.arch === 'arm64' ? 'mac-arm64' :
@@ -149,10 +159,12 @@ async function fetchFfmpeg(target) {
       process.platform === 'win32'  ? 'win-x64' : null,
     ].filter(Boolean);
     if (targets.length === 0) {
-      console.error(`unsupported host platform: ${process.platform}`);
+      console.error(`unsupported host platform: ${process.platform} (use --platform=mac, --platform=win, or --all)`);
       process.exit(1);
     }
   }
+
+  console.log(`Targets: ${targets.join(', ')}`);
 
   for (const t of targets) {
     await fetchYtDlp(t);

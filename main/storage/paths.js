@@ -45,4 +45,18 @@ function revealInExplorer(targetPath) {
   }
 }
 
-module.exports = { sanitizeFilename, resolveBinary, revealInExplorer };
+function truncateForOS(fullPath, opts = {}) {
+  const platform = opts.platform || process.platform;
+  if (platform !== 'win32') return fullPath;
+  const MAX = 259;
+  if (fullPath.length <= MAX) return fullPath;
+
+  const ext = path.extname(fullPath);
+  const dir = path.dirname(fullPath);
+  const base = path.basename(fullPath, ext);
+  const overflow = fullPath.length - MAX;
+  const newBase = base.slice(0, Math.max(1, base.length - overflow));
+  return path.join(dir, newBase + ext);
+}
+
+module.exports = { sanitizeFilename, resolveBinary, revealInExplorer, truncateForOS };

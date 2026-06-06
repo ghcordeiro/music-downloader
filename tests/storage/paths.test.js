@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeFilename, resolveBinary } from '../../main/storage/paths.js';
+import { sanitizeFilename, resolveBinary, truncateForOS } from '../../main/storage/paths.js';
 import path from 'node:path';
 
 describe('sanitizeFilename', () => {
@@ -43,5 +43,28 @@ describe('resolveBinary', () => {
   it('throws on unsupported platforms', () => {
     expect(() => resolveBinary('yt-dlp', { platform: 'linux', arch: 'x64', root: '/app' }))
       .toThrow(/unsupported platform/);
+  });
+});
+
+describe('truncateForOS', () => {
+  it('passes through normal paths', () => {
+    expect(truncateForOS('/Music/Playlist/Artist - Title.mp3', { platform: 'darwin' }))
+      .toBe('/Music/Playlist/Artist - Title.mp3');
+  });
+
+  it('truncates the filename to keep the path under 260 chars on Windows', () => {
+    const baseDir = 'C:\\Users\\Friend\\Music\\Music Downloader\\Some Playlist\\';
+    const veryLong = 'A'.repeat(300) + '.mp3';
+    const result = truncateForOS(baseDir + veryLong, { platform: 'win32' });
+    expect(result.length).toBeLessThanOrEqual(259);
+    expect(result.endsWith('.mp3')).toBe(true);
+  });
+
+  it('preserves directory and extension when truncating', () => {
+    const baseDir = 'C:\\Users\\Friend\\Music\\My Playlist\\';
+    const veryLong = 'A'.repeat(300) + '.mp3';
+    const result = truncateForOS(baseDir + veryLong, { platform: 'win32' });
+    expect(result.startsWith(baseDir)).toBe(true);
+    expect(result.endsWith('.mp3')).toBe(true);
   });
 });

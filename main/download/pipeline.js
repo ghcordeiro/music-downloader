@@ -2,7 +2,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
-const { sanitizeFilename } = require('../storage/paths.js');
+const { sanitizeFilename, truncateForOS } = require('../storage/paths.js');
 
 function uuid() {
   return crypto.randomBytes(8).toString('hex');
@@ -84,7 +84,7 @@ function createPipeline(deps) {
           mixType,
           label: enriched.label,
         });
-        const finalPath = path.join(targetDir, filename);
+        const finalPath = truncateForOS(path.join(targetDir, filename));
 
         await convertToMp3(sourceFile, finalPath, { bitrateKbps, signal });
 

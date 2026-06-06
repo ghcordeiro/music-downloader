@@ -50,6 +50,7 @@ jobs:
     needs: test
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'mac' || github.event.inputs.target == 'both'
     runs-on: macos-latest
+    environment: PROD
     env:
       SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
       SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
@@ -70,13 +71,20 @@ jobs:
       - name: Create build env file
         shell: bash
         run: |
+          if [ -z "$SPOTIFY_CLIENT_ID" ] || [ -z "$SPOTIFY_CLIENT_SECRET" ]; then
+            echo "::error::SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET não foram fornecidos. Verifique que o environment PROD existe e tem os secrets configurados em Settings → Environments → PROD."
+            exit 1
+          fi
           {
-            echo "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-ci_placeholder_client_id}"
-            echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-ci_placeholder_client_secret}"
+            echo "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}"
+            echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}"
           } > .env
 
-      - name: Prepare binaries and credentials
-        run: npm run prebuild
+      - name: Fetch macOS binaries (yt-dlp + ffmpeg)
+        run: node scripts/fetch-binaries.js --platform=mac
+
+      - name: Embed credentials
+        run: npm run embed-creds
 
       - name: Build macOS installers
         run: npx electron-builder --mac --publish never
@@ -96,6 +104,7 @@ jobs:
     needs: test
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'win' || github.event.inputs.target == 'both'
     runs-on: ubuntu-latest
+    environment: PROD
     env:
       SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
       SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
@@ -123,13 +132,20 @@ jobs:
       - name: Create build env file
         shell: bash
         run: |
+          if [ -z "$SPOTIFY_CLIENT_ID" ] || [ -z "$SPOTIFY_CLIENT_SECRET" ]; then
+            echo "::error::SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET não foram fornecidos. Verifique que o environment PROD existe e tem os secrets configurados em Settings → Environments → PROD."
+            exit 1
+          fi
           {
-            echo "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-ci_placeholder_client_id}"
-            echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-ci_placeholder_client_secret}"
+            echo "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}"
+            echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}"
           } > .env
 
-      - name: Prepare binaries and credentials
-        run: npm run prebuild
+      - name: Fetch Windows binaries (yt-dlp + ffmpeg)
+        run: node scripts/fetch-binaries.js --platform=win
+
+      - name: Embed credentials
+        run: npm run embed-creds
 
       - name: Build Windows installer
         run: npx electron-builder --win --x64 --publish never

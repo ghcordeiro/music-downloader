@@ -47,13 +47,14 @@ function parseMixType(title) {
   return { cleanTitle: title.trim(), mixType: null };
 }
 
-function buildFilename({ artist, title, label }) {
+function buildFilename({ artist, title, mixType, label }) {
   const a = sanitizeFilename(artist || 'Unknown');
   const t = sanitizeFilename(title || 'untitled');
+  const mixPart = mixType ? ` (${sanitizeFilename(mixType)})` : '';
   const labelPart = label && label.trim()
     ? ` [${sanitizeFilename(label.trim())}]`
     : '';
-  return `${a} - ${t}${labelPart}.mp3`;
+  return `${a} - ${t}${mixPart}${labelPart}.mp3`;
 }
 
 module.exports = { buildFilename, parseMixType };

@@ -6,6 +6,8 @@ import {
   NetworkError,
   BinaryMissingError,
   DiskFullError,
+  OutputFolderUnwritableError,
+  NoInternetError,
   UnexpectedError,
 } from '../main/errors.js';
 
@@ -33,5 +35,17 @@ describe('typed errors', () => {
     const err = new UnexpectedError(new Error('boom'));
     expect(err.code).toBe('UNEXPECTED');
     expect(err.reference).toMatch(/^[A-Z0-9]{6}$/);
+  });
+
+  it('OutputFolderUnwritableError includes the folder path', () => {
+    const err = new OutputFolderUnwritableError('/tmp/out');
+    expect(err.code).toBe('OUTPUT_UNWRITABLE');
+    expect(err.userMessage).toMatch(/\/tmp\/out/);
+  });
+
+  it('NoInternetError carries a Portuguese user message', () => {
+    const err = new NoInternetError('timeout');
+    expect(err.code).toBe('NO_INTERNET');
+    expect(err.userMessage).toMatch(/internet/i);
   });
 });

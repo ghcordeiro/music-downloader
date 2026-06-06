@@ -57,6 +57,21 @@ class DiskFullError extends AppError {
   }
 }
 
+class OutputFolderUnwritableError extends AppError {
+  constructor(folder) {
+    super(`output folder unwritable: ${folder}`, 'OUTPUT_UNWRITABLE',
+      `Não consigo escrever em ${folder}, escolha outra pasta.`);
+    this.folder = folder;
+  }
+}
+
+class NoInternetError extends AppError {
+  constructor(detail) {
+    super(`no internet: ${detail}`, 'NO_INTERNET',
+      'Sem internet, verifique sua conexão.');
+  }
+}
+
 class UnexpectedError extends AppError {
   constructor(cause) {
     super(`unexpected error: ${cause?.message || cause}`, 'UNEXPECTED',
@@ -74,5 +89,7 @@ module.exports = {
   NetworkError,
   BinaryMissingError,
   DiskFullError,
+  OutputFolderUnwritableError,
+  NoInternetError,
   UnexpectedError,
 };

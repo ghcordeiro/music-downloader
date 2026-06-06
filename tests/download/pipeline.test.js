@@ -1,8 +1,16 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createPipeline } from '../../main/download/pipeline.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+
+const defaultExtras = {
+  parseMixType: (t) => ({ cleanTitle: t, mixType: null }),
+  enrichment: { lookup: async () => null },
+  library: { has: async () => false, register: async () => {} },
+  hashPlaylist: () => 'plh',
+  hashTrack: () => 'th',
+};
 
 describe('pipeline.run — single track happy path', () => {
   it('emits started → done and writes a file', async () => {
@@ -26,6 +34,7 @@ describe('pipeline.run — single track happy path', () => {
       writeTags: async () => { calls.tag++; },
       buildFilename: ({ artist, title }) => `${artist} - ${title}.mp3`,
       probeBitrateKbps: async () => 192,
+      ...defaultExtras,
     });
 
     await pipeline.run({
@@ -55,6 +64,7 @@ describe('pipeline.run — failures', () => {
       writeTags: async () => {},
       buildFilename: ({ artist, title }) => `${artist} - ${title}.mp3`,
       probeBitrateKbps: async () => 192,
+      ...defaultExtras,
     });
 
     const result = await pipeline.run({
@@ -89,6 +99,7 @@ describe('pipeline.run — failures', () => {
       writeTags: async () => {},
       buildFilename: ({ artist, title }) => `${artist} - ${title}.mp3`,
       probeBitrateKbps: async () => 192,
+      ...defaultExtras,
     });
 
     await pipeline.run({
@@ -100,5 +111,85 @@ describe('pipeline.run — failures', () => {
     });
 
     expect(events.filter(e => e.type === 'started')).toHaveLength(1);
+  });
+});
+
+describe('pipeline.run — enrichment + library', () => {
+  it('skips tracks already in the library', async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdrun-'));
+    const events = [];
+
+    const pipeline = createPipeline({
+      ytdlp: {
+        searchYouTubeForTrack: async () => ({ url: 'https://x', title: 'X' }),
+        downloadAudio: async (url, t) => fs.writeFileSync(t.replace('.%(ext)s', '.opus'), Buffer.from('x')),
+      },
+      convertToMp3: async (i, o) => fs.copyFileSync(i, o),
+      writeTags: async () => {},
+      buildFilename: ({ artist, title }) => `${artist} - ${title}.mp3`,
+      probeBitrateKbps: async () => 192,
+      parseMixType: (t) => ({ cleanTitle: t, mixType: null }),
+      enrichment: { lookup: async () => null },
+      library: {
+        has: async () => true,
+        register: async () => {},
+      },
+      hashPlaylist: () => 'plh',
+      hashTrack: () => 'th',
+    });
+
+    await pipeline.run({
+      playlistName: 'PL',
+      platform: 'spotify',
+      sourceId: 'abc',
+      tracks: [{ name: 'X', artist: 'A' }],
+      outputDir: outDir,
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(events.map(e => e.type)).toEqual(['started', 'skipped']);
+  });
+
+  it('parses mix type and asks enrichment when source lacks label', async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdrun-'));
+    let enrichmentCalls = 0;
+    let receivedTitle = null;
+    let receivedSubtitle = null;
+
+    const pipeline = createPipeline({
+      ytdlp: {
+        searchYouTubeForTrack: async () => ({ url: 'https://x', title: 'X' }),
+        downloadAudio: async (url, t) => fs.writeFileSync(t.replace('.%(ext)s', '.opus'), Buffer.from('x')),
+      },
+      convertToMp3: async (i, o) => fs.copyFileSync(i, o),
+      writeTags: async (file, fields) => {
+        receivedTitle = fields.title;
+        receivedSubtitle = fields.subtitle;
+      },
+      buildFilename: ({ artist, title, mixType, label }) =>
+        `${artist} - ${title}${mixType ? ` (${mixType})` : ''}${label ? ` [${label}]` : ''}.mp3`,
+      probeBitrateKbps: async () => 192,
+      parseMixType: (t) => t.includes('(Extended)')
+        ? { cleanTitle: t.replace(' (Extended)', ''), mixType: 'Extended Mix' }
+        : { cleanTitle: t, mixType: null },
+      enrichment: { lookup: async () => { enrichmentCalls++; return { label: 'PMR', year: '2013', genre: 'House' }; } },
+      library: { has: async () => false, register: async () => {} },
+      hashPlaylist: () => 'plh',
+      hashTrack: () => 'th',
+    });
+
+    await pipeline.run({
+      playlistName: 'PL',
+      platform: 'youtube',
+      sourceId: 'xyz',
+      tracks: [{ name: 'Latch (Extended)', artist: 'Disclosure' }],
+      outputDir: outDir,
+      onEvent: () => {},
+    });
+
+    expect(enrichmentCalls).toBe(1);
+    expect(receivedTitle).toBe('Latch');
+    expect(receivedSubtitle).toBe('Extended Mix');
+    expect(fs.existsSync(path.join(outDir, 'PL', 'Disclosure - Latch (Extended Mix) [PMR].mp3'))).toBe(true);
   });
 });

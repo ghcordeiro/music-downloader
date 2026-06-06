@@ -1,4 +1,3 @@
-const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
@@ -10,12 +9,16 @@ function uuid() {
 }
 
 function createPipeline(deps) {
-  const { ytdlp, convertToMp3, writeTags, buildFilename, probeBitrateKbps } = deps;
+  const {
+    ytdlp, convertToMp3, writeTags, buildFilename, probeBitrateKbps,
+    parseMixType, enrichment, library, hashPlaylist, hashTrack,
+  } = deps;
 
-  async function run({ playlistName, tracks, outputDir, onEvent, signal }) {
+  async function run({ playlistName, platform, sourceId, tracks, outputDir, onEvent, signal }) {
     const targetDir = path.join(outputDir, sanitizeFilename(playlistName));
     await fsp.mkdir(targetDir, { recursive: true });
 
+    const playlistHash = hashPlaylist({ platform, sourceId });
     const ok = [];
     const failed = [];
 
@@ -25,6 +28,13 @@ function createPipeline(deps) {
       onEvent?.({ type: 'started', trackIdx: idx, name: track.name, artist: track.artist });
 
       try {
+        const trackHash = hashTrack({ artist: track.artist, title: track.name });
+        if (await library.has(playlistHash, trackHash)) {
+          onEvent?.({ type: 'skipped', trackIdx: idx });
+          ok.push(track);
+          continue;
+        }
+
         const search = await ytdlp.searchYouTubeForTrack(
           { artist: track.artist, title: track.name },
           { signal }
@@ -42,27 +52,57 @@ function createPipeline(deps) {
         const sourceFile = await findDownloadedFile(tmpBase);
         const bitrateKbps = await probeBitrateKbps(sourceFile);
 
+        const { cleanTitle, mixType } = parseMixType(track.name);
+
+        let enriched = {
+          label: track.label || '',
+          year: track.year || '',
+          genre: '',
+          isrc: track.isrc || '',
+          mbid: '',
+        };
+        if (!enriched.label) {
+          const mb = await enrichment.lookup({
+            artist: track.artist,
+            title: cleanTitle,
+            isrc: enriched.isrc || undefined,
+          });
+          if (mb) {
+            enriched = {
+              label: mb.label || enriched.label,
+              year: mb.year || enriched.year,
+              genre: mb.genre || enriched.genre,
+              isrc: mb.isrc || enriched.isrc,
+              mbid: mb.mbid || '',
+            };
+          }
+        }
+
         const filename = buildFilename({
           artist: track.artist,
-          title: track.name,
-          label: track.label || '',
+          title: cleanTitle,
+          mixType,
+          label: enriched.label,
         });
         const finalPath = path.join(targetDir, filename);
 
         await convertToMp3(sourceFile, finalPath, { bitrateKbps, signal });
 
         await writeTags(finalPath, {
-          title: track.name,
+          title: cleanTitle,
+          subtitle: mixType || '',
           artist: track.artist,
           album: playlistName,
           trackNumber: `${idx + 1}/${tracks.length}`,
-          year: track.year || '',
-          publisher: track.label || '',
-          isrc: track.isrc || '',
-          comment: `Source: ${search.title} → MP3 ${bitrateKbps}kbps`,
+          year: enriched.year,
+          publisher: enriched.label,
+          genre: enriched.genre,
+          isrc: enriched.isrc,
+          comment: `Source: ${search.title} → MP3 ${bitrateKbps}kbps${enriched.mbid ? ` | MB: ${enriched.mbid}` : ''}`,
         });
 
         await fsp.unlink(sourceFile).catch(() => {});
+        await library.register(playlistHash, trackHash);
         ok.push(track);
         onEvent?.({ type: 'done', trackIdx: idx });
       } catch (err) {

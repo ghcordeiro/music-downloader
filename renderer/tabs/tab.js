@@ -58,7 +58,15 @@ export function initTab(config) {
     if (!url) return;
     showState('loading');
     const resp = await fetchPlaylistFn(url);
-    if (!resp.ok) { showError(resp.userMessage || 'Falha ao buscar.'); return; }
+    if (!resp.ok) {
+      if (resp.code === 'UNEXPECTED') {
+        window.dispatchEvent(new CustomEvent('app:tier3', { detail: { userMessage: resp.userMessage, reference: resp.reference } }));
+        showState('empty');
+        return;
+      }
+      showError(resp.userMessage || 'Erro.');
+      return;
+    }
     currentData = resp.data;
     renderPreview(currentData);
     showState('preview');
@@ -93,7 +101,15 @@ export function initTab(config) {
       tracks: currentData.tracks,
     });
     unsub();
-    if (!resp.ok) { showError(resp.userMessage || 'Erro ao baixar.'); return; }
+    if (!resp.ok) {
+      if (resp.code === 'UNEXPECTED') {
+        window.dispatchEvent(new CustomEvent('app:tier3', { detail: { userMessage: resp.userMessage, reference: resp.reference } }));
+        showState('empty');
+        return;
+      }
+      showError(resp.userMessage || 'Erro ao baixar.');
+      return;
+    }
 
     const okCount = resp.data.ok.length;
     const failed = resp.data.failed.length;

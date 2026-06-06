@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld('api', {
     get: () => ipcRenderer.invoke('config:get'),
     set: (value) => ipcRenderer.invoke('config:set', value),
   },
+  dialog: {
+    pickFolder: (current) => ipcRenderer.invoke('dialog:pickFolder', current),
+  },
+  library: {
+    reset: () => ipcRenderer.invoke('library:reset'),
+  },
   spotify: {
     fetchPlaylist: (url) => ipcRenderer.invoke('spotify:fetch', url),
   },

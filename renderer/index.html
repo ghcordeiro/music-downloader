@@ -22,6 +22,8 @@
       <section id="main" hidden>
         <nav class="tabs">
           <button class="tab active" data-tab="spotify">Spotify</button>
+          <button class="tab" data-tab="youtube">YouTube</button>
+          <button class="tab" data-tab="soundcloud">SoundCloud</button>
         </nav>
 
         <div class="panel" id="spotifyPanel">
@@ -67,6 +69,84 @@
           <div class="state state-error" data-state="error" hidden>
             <div id="errorMessage"></div>
             <div class="row-right"><button id="errorRetry">Voltar</button></div>
+          </div>
+        </div>
+
+        <div class="panel" id="youtubePanel" hidden>
+          <div class="state state-empty" data-state="empty">
+            <p>Cole o link de uma playlist ou vídeo do YouTube:</p>
+            <input id="youtubeUrl" placeholder="https://www.youtube.com/watch?v=..." />
+            <div class="row-right"><button id="youtubeFetch">Buscar</button></div>
+          </div>
+          <div class="state state-loading" data-state="loading" hidden><p>Carregando…</p></div>
+          <div class="state state-preview" data-state="preview" hidden>
+            <div class="preview">
+              <img id="youtubeCover" alt="" />
+              <div>
+                <div id="youtubeName"></div>
+                <div id="youtubeMeta"></div>
+              </div>
+            </div>
+            <div class="row-right">
+              <button id="youtubePreviewCancel">Cancelar</button>
+              <button id="youtubePreviewStart">Baixar</button>
+            </div>
+          </div>
+          <div class="state state-downloading" data-state="downloading" hidden>
+            <div class="bar"><div id="youtubeBar" class="bar-fill"></div></div>
+            <div id="youtubeCounter"></div>
+            <ul id="youtubeTrackList"></ul>
+            <div class="row-right"><button id="youtubeDownloadCancel">Cancelar</button></div>
+          </div>
+          <div class="state state-done" data-state="done" hidden>
+            <div id="youtubeSummary"></div>
+            <div class="row-right">
+              <button id="youtubeOpenFolder">Ver pasta</button>
+              <button id="youtubeAnother">Baixar outra playlist</button>
+            </div>
+          </div>
+          <div class="state state-error" data-state="error" hidden>
+            <div id="youtubeErrorMessage"></div>
+            <div class="row-right"><button id="youtubeErrorRetry">Voltar</button></div>
+          </div>
+        </div>
+
+        <div class="panel" id="soundcloudPanel" hidden>
+          <div class="state state-empty" data-state="empty">
+            <p>Cole o link de uma faixa ou set do SoundCloud:</p>
+            <input id="soundcloudUrl" placeholder="https://soundcloud.com/..." />
+            <div class="row-right"><button id="soundcloudFetch">Buscar</button></div>
+          </div>
+          <div class="state state-loading" data-state="loading" hidden><p>Carregando…</p></div>
+          <div class="state state-preview" data-state="preview" hidden>
+            <div class="preview">
+              <img id="soundcloudCover" alt="" />
+              <div>
+                <div id="soundcloudName"></div>
+                <div id="soundcloudMeta"></div>
+              </div>
+            </div>
+            <div class="row-right">
+              <button id="soundcloudPreviewCancel">Cancelar</button>
+              <button id="soundcloudPreviewStart">Baixar</button>
+            </div>
+          </div>
+          <div class="state state-downloading" data-state="downloading" hidden>
+            <div class="bar"><div id="soundcloudBar" class="bar-fill"></div></div>
+            <div id="soundcloudCounter"></div>
+            <ul id="soundcloudTrackList"></ul>
+            <div class="row-right"><button id="soundcloudDownloadCancel">Cancelar</button></div>
+          </div>
+          <div class="state state-done" data-state="done" hidden>
+            <div id="soundcloudSummary"></div>
+            <div class="row-right">
+              <button id="soundcloudOpenFolder">Ver pasta</button>
+              <button id="soundcloudAnother">Baixar outra playlist</button>
+            </div>
+          </div>
+          <div class="state state-error" data-state="error" hidden>
+            <div id="soundcloudErrorMessage"></div>
+            <div class="row-right"><button id="soundcloudErrorRetry">Voltar</button></div>
           </div>
         </div>
       </section>

@@ -1,0 +1,86 @@
+name: Build app
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Plataforma'
+        required: true
+        default: 'both'
+        type: choice
+        options: [mac, win, both]
+  push:
+    tags: ['v*']
+
+jobs:
+  build-mac:
+    if: ${{ github.event_name == 'push' || github.event.inputs.target == 'mac' || github.event.inputs.target == 'both' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Write .env from secrets
+        env:
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        run: |
+          if [ -z "$SPOTIFY_CLIENT_ID" ] || [ -z "$SPOTIFY_CLIENT_SECRET" ]; then
+            echo "::error::SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET precisam estar setados como GitHub Secrets em Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          printf 'SPOTIFY_CLIENT_ID=%s\nSPOTIFY_CLIENT_SECRET=%s\n' "$SPOTIFY_CLIENT_ID" "$SPOTIFY_CLIENT_SECRET" > .env
+      - name: Build Mac DMG
+        run: npm run dist:mac
+      - name: Upload DMG artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-downloader-mac
+          path: dist/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+      - name: Attach to release (only on tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+
+  build-win:
+    if: ${{ github.event_name == 'push' || github.event.inputs.target == 'win' || github.event.inputs.target == 'both' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Write .env from secrets
+        shell: bash
+        env:
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        run: |
+          if [ -z "$SPOTIFY_CLIENT_ID" ] || [ -z "$SPOTIFY_CLIENT_SECRET" ]; then
+            echo "::error::Secrets não configurados."
+            exit 1
+          fi
+          printf 'SPOTIFY_CLIENT_ID=%s\nSPOTIFY_CLIENT_SECRET=%s\n' "$SPOTIFY_CLIENT_ID" "$SPOTIFY_CLIENT_SECRET" > .env
+      - name: Build Windows installer
+        run: npm run dist:win
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-downloader-win
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: Attach to release (only on tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe

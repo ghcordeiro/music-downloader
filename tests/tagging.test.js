@@ -30,3 +30,39 @@ describe('writeTags', () => {
     expect(tags.comment.text).toContain('YouTube');
   });
 });
+
+describe('writeTags — DJ-quality fields', () => {
+  it('writes subtitle (TIT3), publisher, genre, ISRC', async () => {
+    const file = copyFixture();
+    await writeTags(file, {
+      title: 'Latch',
+      subtitle: 'Extended Mix',
+      artist: 'Disclosure',
+      album: 'My Playlist',
+      trackNumber: '1/1',
+      year: '2013',
+      publisher: 'PMR',
+      genre: 'House',
+      isrc: 'GBUM71300001',
+      comment: 'Source: Spotify',
+    });
+    const tags = NodeID3.read(file);
+    expect(tags.subtitle).toBe('Extended Mix');
+    expect(tags.publisher).toBe('PMR');
+    expect(tags.genre).toBe('House');
+    expect(tags.ISRC || tags.isrc).toBe('GBUM71300001');
+  });
+
+  it('omits subtitle when not provided', async () => {
+    const file = copyFixture();
+    await writeTags(file, {
+      title: 'Halo',
+      artist: 'Beyoncé',
+      album: 'Pop',
+      trackNumber: '1/1',
+      comment: 'Source: Spotify',
+    });
+    const tags = NodeID3.read(file);
+    expect(tags.subtitle || '').toBe('');
+  });
+});

@@ -10,6 +10,7 @@ async function writeTags(filePath, fields) {
     year: fields.year || '',
     comment: { language: 'eng', text: fields.comment || '' },
   };
+  if (fields.subtitle) tags.subtitle = fields.subtitle;
   if (fields.publisher) tags.publisher = fields.publisher;
   if (fields.genre) tags.genre = fields.genre;
   if (fields.isrc) tags.ISRC = fields.isrc;

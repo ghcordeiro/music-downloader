@@ -1,0 +1,159 @@
+name: Build installers
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+      - music-downloader-electron
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  build-mac:
+    name: Build macOS DMG
+    needs: test
+    runs-on: macos-latest
+    env:
+      SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+      SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create build env file
+        shell: bash
+        run: |
+          {
+            echo "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-ci_placeholder_client_id}"
+            echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-ci_placeholder_client_secret}"
+          } > .env
+
+      - name: Prepare binaries and credentials
+        run: npm run prebuild
+
+      - name: Build macOS installers
+        run: npx electron-builder --mac --publish never
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installers
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+            dist/latest-mac.yml
+
+  build-windows:
+    name: Build Windows EXE
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+      SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Windows build dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wine64 wine32 mono-devel
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create build env file
+        shell: bash
+        run: |
+          {
+            echo "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-ci_placeholder_client_id}"
+            echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-ci_placeholder_client_secret}"
+          } > .env
+
+      - name: Prepare binaries and credentials
+        run: npm run prebuild
+
+      - name: Build Windows installer
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+
+  release:
+    name: Publish GitHub Release
+    needs:
+      - build-mac
+      - build-windows
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/*.dmg
+            release-artifacts/*.exe
+            release-artifacts/*.blockmap
+            release-artifacts/latest*.yml

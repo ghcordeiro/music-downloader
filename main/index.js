@@ -1,22 +1,41 @@
 const { app, BrowserWindow } = require('electron');
-const path = require('path');
+const path = require('node:path');
+const fs = require('node:fs');
+try {
+  const envPath = path.join(__dirname, '..', '.env');
+  if (fs.existsSync(envPath)) {
+    for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.+)\s*$/);
+      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^"|"$/g, '');
+    }
+  }
+} catch { /* env loading is best-effort */ }
+const { createConfig } = require('./storage/config.js');
+const { registerIpc } = require('./ipc.js');
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 720,
-    height: 540,
+let mainWindow = null;
+
+function createWindow(config) {
+  mainWindow = new BrowserWindow({
+    width: 760,
+    height: 580,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
-  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  return mainWindow;
 }
 
 app.whenReady().then(() => {
-  createWindow();
+  const config = createConfig(app.getPath('userData'));
+  const window = createWindow(config);
+  registerIpc({ config, window });
+
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(config);
   });
 });
 

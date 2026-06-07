@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeFilename, resolveBinary, truncateForOS } from '../../main/storage/paths.js';
+import { sanitizeFilename, resolveBinary, truncateForOS, getBinaryRoot } from '../../main/storage/paths.js';
 import path from 'node:path';
+import fs from 'node:fs';
 
 describe('sanitizeFilename', () => {
   it('removes characters forbidden on Windows', () => {
@@ -21,6 +22,17 @@ describe('sanitizeFilename', () => {
     const long = 'a'.repeat(300);
     const result = sanitizeFilename(long);
     expect(result.length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe('getBinaryRoot', () => {
+  it('works when called without opts and resolves to a real directory containing the binaries folder', () => {
+    expect(() => getBinaryRoot()).not.toThrow();
+    const root = getBinaryRoot();
+    expect(path.isAbsolute(root)).toBe(true);
+    // The repo's root contains binaries/ regardless of the checkout directory name
+    // (local dev vs CI vs whatever the user calls it).
+    expect(fs.existsSync(path.join(root, 'binaries'))).toBe(true);
   });
 });
 

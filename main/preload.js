@@ -19,6 +19,16 @@ contextBridge.exposeInMainWorld('api', {
   spotify: {
     fetchPlaylist: (url) => ipcRenderer.invoke('spotify:fetch', url),
   },
+  spotifyAccount: {
+    getStatus: () => ipcRenderer.invoke('spotify:status'),
+    connect: () => ipcRenderer.invoke('spotify:connect'),
+    disconnect: () => ipcRenderer.invoke('spotify:disconnect'),
+    onStatusChange: (cb) => {
+      const listener = (_e, payload) => cb(payload);
+      ipcRenderer.on('spotify:status-changed', listener);
+      return () => ipcRenderer.off('spotify:status-changed', listener);
+    },
+  },
   youtube: {
     fetchPlaylist: (url) => ipcRenderer.invoke('youtube:fetch', url),
   },

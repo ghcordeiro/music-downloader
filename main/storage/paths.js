@@ -16,7 +16,7 @@ function sanitizeFilename(name) {
     : cleaned;
 }
 
-function getBinaryRoot(opts) {
+function getBinaryRoot(opts = {}) {
   if (opts.root) return opts.root;
   try {
     const { app } = require('electron');
@@ -68,4 +68,4 @@ function truncateForOS(fullPath, opts = {}) {
   return path.join(dir, newBase + ext);
 }
 
-module.exports = { sanitizeFilename, resolveBinary, revealInExplorer, truncateForOS };
+module.exports = { sanitizeFilename, resolveBinary, revealInExplorer, truncateForOS, getBinaryRoot };

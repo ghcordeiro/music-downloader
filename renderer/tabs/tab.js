@@ -38,7 +38,7 @@ export function initTab(config) {
     tracks.forEach((t, i) => {
       const li = document.createElement('li');
       li.dataset.idx = i;
-      li.innerHTML = `<span class="num">${i + 1}</span><span class="name">${escapeHtml(t.artist)} — ${escapeHtml(t.name)}</span><span class="status"></span>`;
+      li.innerHTML = `<span class="num">${i + 1}</span><span class="name">${escapeHtml(t.artist)} — ${escapeHtml(t.name)}</span><span class="source"></span><span class="status"></span>`;
       ul.appendChild(li);
     });
   }
@@ -46,6 +46,16 @@ export function initTab(config) {
   function setTrackStatus(idx, icon) {
     const li = $(trackListId).querySelector(`li[data-idx="${idx}"]`);
     if (li) li.querySelector('.status').textContent = icon;
+  }
+
+  function setTrackSource(idx, label, via) {
+    const li = $(trackListId).querySelector(`li[data-idx="${idx}"]`);
+    if (!li) return;
+    const el = li.querySelector('.source');
+    if (!el) return;
+    el.textContent = label || '';
+    el.className = 'source'
+      + (via === 'spotify-direct' ? ' spotify' : via === 'youtube' ? ' youtube' : '');
   }
 
   function showError(msg) {
@@ -87,8 +97,20 @@ export function initTab(config) {
 
     const unsub = window.api.download.onProgress((evt) => {
       if (evt.type === 'started') setTrackStatus(evt.trackIdx, '↻');
-      else if (evt.type === 'done') { setTrackStatus(evt.trackIdx, '✓'); completed++; }
-      else if (evt.type === 'not_found') { setTrackStatus(evt.trackIdx, '✗'); completed++; }
+      else if (evt.type === 'sourcing') setTrackSource(evt.trackIdx, evt.label, evt.via);
+      else if (evt.type === 'done') {
+        if (evt.label) setTrackSource(evt.trackIdx, evt.label, evt.via);
+        setTrackStatus(evt.trackIdx, '✓');
+        completed++;
+      }
+      else if (evt.type === 'not_found') {
+        setTrackStatus(evt.trackIdx, '✗');
+        if (evt.reason) {
+          const li = $(trackListId).querySelector(`li[data-idx="${evt.trackIdx}"]`);
+          if (li) li.title = evt.reason;
+        }
+        completed++;
+      }
       else if (evt.type === 'skipped') { setTrackStatus(evt.trackIdx, '·'); completed++; }
       $(counterId).textContent = `${completed} / ${currentTotal}`;
       $(barId).style.width = `${Math.round((completed / currentTotal) * 100)}%`;
@@ -111,12 +133,35 @@ export function initTab(config) {
       return;
     }
 
-    const okCount = resp.data.ok.length;
-    const failed = resp.data.failed.length;
+    const okItems = resp.data.ok;
+    const failedItems = resp.data.failed;
+    const okCount = okItems.length;
+
+    const viaSpotify = okItems.filter((o) => o.via === 'spotify-direct').length;
+    const viaYouTube = okItems.filter((o) => o.via === 'youtube').length;
+    const viaYouTubeFallback = okItems.filter((o) => o.via === 'youtube' && o.fallbackReason).length;
+    let breakdownHtml = '';
+    if (viaSpotify > 0 && viaYouTube > 0) {
+      breakdownHtml = `<div style="margin-top:6px;font-size:12px;color:#555;">${viaSpotify} via Spotify · ${viaYouTube} via YouTube (fallback)</div>`;
+    } else if (viaSpotify > 0) {
+      breakdownHtml = `<div style="margin-top:6px;font-size:12px;color:#555;">${viaSpotify} via Spotify · 320 kbps</div>`;
+    } else if (viaYouTube > 0 && currentData.platform === 'spotify') {
+      breakdownHtml = `<div style="margin-top:6px;font-size:12px;color:#555;">${viaYouTube} via YouTube</div>`;
+    }
+    if (viaYouTubeFallback > 0) {
+      breakdownHtml += `<div style="margin-top:6px;font-size:12px;color:#cc6633;">⚠ ${viaYouTubeFallback} em ~128 kbps (YouTube) — download direto Spotify falhou</div>`;
+    }
+
     $(summaryId).innerHTML =
       `<div style="font-size:28px;font-weight:700;">${okCount} / ${currentTotal}</div>` +
       `<div>músicas baixadas</div>` +
-      (failed ? `<div style="margin-top:8px;color:#cc6633">⚠ ${failed} não encontradas</div>` : '');
+      breakdownHtml +
+      (failedItems.length
+        ? `<div style="margin-top:8px;color:#cc6633">⚠ ${failedItems.length} falharam</div>`
+          + (failedItems[0]?.reason
+            ? `<div style="margin-top:4px;font-size:12px;color:#888">Ex.: ${escapeHtml(String(failedItems[0].reason).slice(0, 120))}</div>`
+            : '')
+        : '');
     showState('done');
   });
 

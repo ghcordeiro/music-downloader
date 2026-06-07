@@ -54,6 +54,7 @@ jobs:
     env:
       SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
       SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+      SPOTIFY_OAUTH_CLIENT_ID: ${{ secrets.SPOTIFY_OAUTH_CLIENT_ID }}
 
     steps:
       - name: Checkout
@@ -71,16 +72,17 @@ jobs:
       - name: Create build env file
         shell: bash
         run: |
-          if [ -z "$SPOTIFY_CLIENT_ID" ] || [ -z "$SPOTIFY_CLIENT_SECRET" ]; then
-            echo "::error::SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET não foram fornecidos. Verifique que o environment PROD existe e tem os secrets configurados em Settings → Environments → PROD."
+          if [ -z "$SPOTIFY_CLIENT_ID" ] || [ -z "$SPOTIFY_CLIENT_SECRET" ] || [ -z "$SPOTIFY_OAUTH_CLIENT_ID" ]; then
+            echo "::error::SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, e SPOTIFY_OAUTH_CLIENT_ID precisam estar configurados em Settings → Environments → PROD."
             exit 1
           fi
           {
             echo "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}"
             echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}"
+            echo "SPOTIFY_OAUTH_CLIENT_ID=${SPOTIFY_OAUTH_CLIENT_ID}"
           } > .env
 
-      - name: Fetch macOS binaries (yt-dlp + ffmpeg)
+      - name: Fetch macOS binaries (yt-dlp + ffmpeg + zotify)
         run: node scripts/fetch-binaries.js --platform=mac
 
       - name: Embed credentials
@@ -108,6 +110,7 @@ jobs:
     env:
       SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
       SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+      SPOTIFY_OAUTH_CLIENT_ID: ${{ secrets.SPOTIFY_OAUTH_CLIENT_ID }}
 
     steps:
       - name: Checkout
@@ -132,16 +135,17 @@ jobs:
       - name: Create build env file
         shell: bash
         run: |
-          if [ -z "$SPOTIFY_CLIENT_ID" ] || [ -z "$SPOTIFY_CLIENT_SECRET" ]; then
-            echo "::error::SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET não foram fornecidos. Verifique que o environment PROD existe e tem os secrets configurados em Settings → Environments → PROD."
+          if [ -z "$SPOTIFY_CLIENT_ID" ] || [ -z "$SPOTIFY_CLIENT_SECRET" ] || [ -z "$SPOTIFY_OAUTH_CLIENT_ID" ]; then
+            echo "::error::SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, e SPOTIFY_OAUTH_CLIENT_ID precisam estar configurados em Settings → Environments → PROD."
             exit 1
           fi
           {
             echo "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}"
             echo "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}"
+            echo "SPOTIFY_OAUTH_CLIENT_ID=${SPOTIFY_OAUTH_CLIENT_ID}"
           } > .env
 
-      - name: Fetch Windows binaries (yt-dlp + ffmpeg)
+      - name: Fetch Windows binaries (yt-dlp + ffmpeg + zotify)
         run: node scripts/fetch-binaries.js --platform=win
 
       - name: Embed credentials

@@ -44,8 +44,31 @@ function showMain() {
     $('#settingsFolder').textContent = cfg.outputDir;
   }
 
+  async function refreshSpotifySettings() {
+    const status = await window.api.spotifyAccount.getStatus();
+    const statusEl = $('#settingsSpotifyStatus');
+    const actionEl = $('#settingsSpotifyAction');
+    if (status.connected) {
+      statusEl.textContent = `✓ Conectado como ${status.email} (${status.plan})`;
+      actionEl.textContent = 'Desconectar';
+      actionEl.onclick = async () => {
+        await window.api.spotifyAccount.disconnect();
+        await refreshSpotifySettings();
+      };
+    } else {
+      statusEl.textContent = 'Não conectado · downloads do Spotify usam YouTube como fonte.';
+      actionEl.textContent = 'Conectar Spotify';
+      actionEl.onclick = async () => {
+        const res = await window.api.spotifyAccount.connect();
+        if (!res.ok) alert(res.userMessage || 'Falha ao conectar.');
+        await refreshSpotifySettings();
+      };
+    }
+  }
+
   $('#settingsBtn').addEventListener('click', async () => {
     await refreshSettingsRows();
+    await refreshSpotifySettings();
     $('#settingsDialog').showModal();
   });
 

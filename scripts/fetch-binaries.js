@@ -137,6 +137,49 @@ async function fetchFfmpeg(target) {
   }
 }
 
+function hostMatchesTarget(target) {
+  if (target === 'mac-arm64') return process.platform === 'darwin' && process.arch === 'arm64';
+  if (target === 'mac-x64') return process.platform === 'darwin' && process.arch === 'x64';
+  if (target === 'win-x64') return process.platform === 'win32';
+  return false;
+}
+
+async function fetchZotify(target) {
+  if (!hostMatchesTarget(target)) {
+    console.warn(`skipping zotify for ${target} (must build on matching host OS/arch)`);
+    return;
+  }
+
+  const dir = path.join(BIN, target);
+  ensureDir(dir);
+  const venvDir = path.join(dir, 'zotify-venv');
+  const pythonBin = path.join(venvDir, target === 'win-x64' ? 'Scripts/python.exe' : 'bin/python3');
+  const launcher = path.join(dir, target === 'win-x64' ? 'zotify.bat' : 'zotify');
+
+  if (!fs.existsSync(pythonBin)) {
+    console.log(`creating zotify venv for ${target}`);
+    const py = process.platform === 'win32' ? 'python' : 'python3';
+    const r = spawnSync(py, ['-m', 'venv', venvDir], { stdio: 'inherit' });
+    if (r.status !== 0) throw new Error('failed to create zotify venv');
+    const pip = spawnSync(pythonBin, ['-m', 'pip', 'install', '--upgrade', 'pip'], { stdio: 'inherit' });
+    if (pip.status !== 0) throw new Error('failed to upgrade pip in zotify venv');
+    const install = spawnSync(
+      pythonBin,
+      ['-m', 'pip', 'install', 'git+https://github.com/zotify-dev/zotify.git'],
+      { stdio: 'inherit' },
+    );
+    if (install.status !== 0) throw new Error('failed to pip install zotify');
+  }
+
+  if (target === 'win-x64') {
+    fs.writeFileSync(launcher, `@echo off\r\n"${pythonBin}" -m zotify %*\r\n`, 'utf8');
+  } else {
+    fs.writeFileSync(launcher, `#!/bin/sh\nexec "${pythonBin}" -m zotify "$@"\n`, 'utf8');
+    fs.chmodSync(launcher, 0o755);
+  }
+  console.log(`zotify launcher ready for ${target}`);
+}
+
 (async () => {
   const argv = process.argv.slice(2);
   const platformArg = argv.find(a => a.startsWith('--platform='))?.split('=')[1];
@@ -169,6 +212,7 @@ async function fetchFfmpeg(target) {
   for (const t of targets) {
     await fetchYtDlp(t);
     await fetchFfmpeg(t);
+    await fetchZotify(t);
   }
   console.log('done.');
 })().catch((e) => {

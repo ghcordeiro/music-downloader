@@ -68,4 +68,4 @@ function truncateForOS(fullPath, opts = {}) {
   return path.join(dir, newBase + ext);
 }
 
-module.exports = { sanitizeFilename, resolveBinary, revealInExplorer, truncateForOS };
+module.exports = { sanitizeFilename, resolveBinary, revealInExplorer, truncateForOS, getBinaryRoot };

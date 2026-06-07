@@ -111,12 +111,26 @@ export function initTab(config) {
       return;
     }
 
-    const okCount = resp.data.ok.length;
-    const failed = resp.data.failed.length;
+    const okItems = resp.data.ok;
+    const failedItems = resp.data.failed;
+    const okCount = okItems.length;
+
+    const viaSpotify = okItems.filter((o) => o.via === 'spotify-direct').length;
+    const viaYouTube = okItems.filter((o) => o.via === 'youtube').length;
+    let breakdownHtml = '';
+    if (viaSpotify > 0 && viaYouTube > 0) {
+      breakdownHtml = `<div style="margin-top:6px;font-size:12px;color:#555;">${viaSpotify} via Spotify · ${viaYouTube} via YouTube (fallback)</div>`;
+    } else if (viaSpotify > 0) {
+      breakdownHtml = `<div style="margin-top:6px;font-size:12px;color:#555;">${viaSpotify} via Spotify</div>`;
+    } else if (viaYouTube > 0 && currentData.platform === 'spotify') {
+      breakdownHtml = `<div style="margin-top:6px;font-size:12px;color:#555;">${viaYouTube} via YouTube</div>`;
+    }
+
     $(summaryId).innerHTML =
       `<div style="font-size:28px;font-weight:700;">${okCount} / ${currentTotal}</div>` +
       `<div>músicas baixadas</div>` +
-      (failed ? `<div style="margin-top:8px;color:#cc6633">⚠ ${failed} não encontradas</div>` : '');
+      breakdownHtml +
+      (failedItems.length ? `<div style="margin-top:8px;color:#cc6633">⚠ ${failedItems.length} não encontradas</div>` : '');
     showState('done');
   });
 

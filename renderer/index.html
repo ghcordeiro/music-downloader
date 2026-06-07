@@ -33,6 +33,12 @@
               <span id="settingsFolder"></span>
               <button id="settingsChangeFolder" type="button">Mudar</button>
             </div>
+            <hr />
+            <div class="settings-row">
+              <label>Spotify:</label>
+              <span id="settingsSpotifyStatus"></span>
+              <button id="settingsSpotifyAction" type="button"></button>
+            </div>
             <div class="settings-row">
               <button id="settingsResetLibrary" type="button">Resetar histórico de downloads</button>
             </div>
@@ -49,6 +55,18 @@
         </nav>
 
         <div class="panel" id="spotifyPanel">
+          <div id="spotifyAuthBanner" class="auth-banner" hidden>
+            <button class="dismiss" id="spotifyAuthBannerDismiss" type="button" aria-label="Dispensar">×</button>
+            <strong>🎵 Conecte sua conta Spotify pra baixar em 320 kbps</strong>
+            <span>Sem conectar, ainda funciona via YouTube (até 160 kbps).</span>
+            <button id="spotifyConnectBtn" type="button" class="primary">Conectar Spotify</button>
+          </div>
+
+          <div id="spotifyAuthPill" class="auth-pill" hidden>
+            <span id="spotifyAuthPillText"></span>
+            <button id="spotifyDisconnectBtn" type="button" class="ghost">Desconectar</button>
+          </div>
+
           <div class="state state-empty" data-state="empty">
             <p>Cole o link de uma playlist do Spotify:</p>
             <input id="spotifyUrl" placeholder="https://open.spotify.com/playlist/..." />
@@ -171,6 +189,15 @@
             <div class="row-right"><button id="soundcloudErrorRetry">Voltar</button></div>
           </div>
         </div>
+
+        <dialog id="oauthDialog">
+          <h2>Aguardando autorização no Spotify…</h2>
+          <p id="oauthDialogBody">Se você fechou o navegador sem querer, clique em "Tentar de novo".</p>
+          <div class="row-right">
+            <button id="oauthDialogRetry" type="button">Tentar de novo</button>
+            <button id="oauthDialogCancel" type="button" value="cancel">Cancelar</button>
+          </div>
+        </dialog>
 
         <dialog id="tier3Dialog">
           <h2>Erro inesperado</h2>

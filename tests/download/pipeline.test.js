@@ -193,3 +193,87 @@ describe('pipeline.run — enrichment + library', () => {
     expect(fs.existsSync(path.join(outDir, 'PL', 'Disclosure - Latch (Extended Mix) [PMR].mp3'))).toBe(true);
   });
 });
+
+describe('pipeline.run — Spotify-direct first, YouTube fallback', () => {
+  function pipelineWithSpotifyDirect(spotifyDirect) {
+    return createPipeline({
+      ytdlp: {
+        searchYouTubeForTrack: async () => ({ url: 'https://yt/x', title: 'X' }),
+        downloadAudio: async (url, t) => fs.writeFileSync(t.replace('.%(ext)s', '.opus'), Buffer.from('y')),
+      },
+      convertToMp3: async (i, o) => fs.copyFileSync(i, o),
+      writeTags: async () => {},
+      buildFilename: ({ artist, title }) => `${artist} - ${title}.mp3`,
+      probeBitrateKbps: async () => 192,
+      parseMixType: (t) => ({ cleanTitle: t, mixType: null }),
+      enrichment: { lookup: async () => null },
+      library: { has: async () => false, register: async () => {} },
+      hashPlaylist: () => 'plh',
+      hashTrack: () => 'th',
+      spotifyDirect,
+    });
+  }
+
+  it('uses Spotify-direct when connected and platform is spotify', async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdrun-'));
+    const calls = { sd: 0 };
+    const pipeline = pipelineWithSpotifyDirect({
+      getStatus: async () => ({ connected: true, email: 'a@b', plan: 'premium' }),
+      downloadTrack: async (_id, outputPath) => {
+        calls.sd++;
+        fs.writeFileSync(outputPath, Buffer.from('ogg'));
+        return { ok: true, sourceCodec: 'vorbis', sourceBitrateKbps: 320, outputPath };
+      },
+    });
+
+    await pipeline.run({
+      playlistName: 'PL',
+      platform: 'spotify',
+      sourceId: 'src',
+      tracks: [{ name: 'X', artist: 'A', spotifyId: 'TRACK1' }],
+      outputDir: outDir,
+      onEvent: () => {},
+    });
+    expect(calls.sd).toBe(1);
+  });
+
+  it('falls through to YouTube when Spotify-direct throws a recoverable error', async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdrun-'));
+    const events = [];
+    const pipeline = pipelineWithSpotifyDirect({
+      getStatus: async () => ({ connected: true, email: 'a@b', plan: 'premium' }),
+      downloadTrack: async () => {
+        const e = new Error('not in catalog');
+        e.code = 'TRACK_NOT_FOUND_SPOTIFY';
+        throw e;
+      },
+    });
+    const result = await pipeline.run({
+      playlistName: 'PL',
+      platform: 'spotify',
+      sourceId: 'src',
+      tracks: [{ name: 'X', artist: 'A', spotifyId: 'T1' }],
+      outputDir: outDir,
+      onEvent: (e) => events.push(e),
+    });
+    expect(events.map((e) => e.type)).toContain('done');
+    expect(result.ok).toHaveLength(1);
+    expect(result.ok[0].via).toBe('youtube');
+  });
+
+  it('skips Spotify-direct entirely when not connected', async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdrun-'));
+    let sdCalled = false;
+    const pipeline = pipelineWithSpotifyDirect({
+      getStatus: async () => ({ connected: false }),
+      downloadTrack: async () => { sdCalled = true; throw new Error('should not be called'); },
+    });
+    await pipeline.run({
+      playlistName: 'PL', platform: 'spotify', sourceId: 'src',
+      tracks: [{ name: 'X', artist: 'A', spotifyId: 'T1' }],
+      outputDir: outDir,
+      onEvent: () => {},
+    });
+    expect(sdCalled).toBe(false);
+  });
+});

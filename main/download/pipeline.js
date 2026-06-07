@@ -3,15 +3,30 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { sanitizeFilename, truncateForOS } = require('../storage/paths.js');
+const { buildProvenanceComment } = require('../spotify-direct/provenance.js');
+
+const RECOVERABLE_SPOTIFY = new Set([
+  'TRACK_NOT_FOUND_SPOTIFY',
+  'REGION_LOCKED',
+  'PREMIUM_REQUIRED',
+  'ZOTIFY_UNRECOGNIZED',
+  'AUTH_EXPIRED',
+  'NOT_CONNECTED',
+]);
 
 function uuid() {
   return crypto.randomBytes(8).toString('hex');
+}
+
+function okEntry(track, via, fallbackReason = null) {
+  return { track, via, fallbackReason };
 }
 
 function createPipeline(deps) {
   const {
     ytdlp, convertToMp3, writeTags, buildFilename, probeBitrateKbps,
     parseMixType, enrichment, library, hashPlaylist, hashTrack,
+    spotifyDirect,
   } = deps;
 
   async function run({ playlistName, platform, sourceId, tracks, outputDir, onEvent, signal }) {
@@ -31,26 +46,63 @@ function createPipeline(deps) {
         const trackHash = hashTrack({ artist: track.artist, title: track.name });
         if (await library.has(playlistHash, trackHash)) {
           onEvent?.({ type: 'skipped', trackIdx: idx });
-          ok.push(track);
+          ok.push(okEntry(track, null));
           continue;
         }
 
-        const search = await ytdlp.searchYouTubeForTrack(
-          { artist: track.artist, title: track.name },
-          { signal }
-        );
-        if (!search) {
-          onEvent?.({ type: 'not_found', trackIdx: idx, reason: 'no youtube result' });
-          failed.push({ track, reason: 'not_found' });
-          continue;
+        let usedSpotifyDirect = false;
+        let spotifyDirectMeta = null;
+        let fallbackReason = null;
+
+        if (platform === 'spotify' && spotifyDirect && track.spotifyId) {
+          let status;
+          try { status = await spotifyDirect.getStatus(); } catch { status = { connected: false }; }
+
+          if (status.connected) {
+            const sdOutputPath = path.join(os.tmpdir(), `mdsd-${uuid()}.ogg`);
+            try {
+              const sd = await spotifyDirect.downloadTrack(track.spotifyId, sdOutputPath, { signal });
+              usedSpotifyDirect = true;
+              spotifyDirectMeta = { ...sd, plan: status.plan };
+            } catch (err) {
+              if (signal?.aborted) throw err;
+              if (RECOVERABLE_SPOTIFY.has(err.code)) {
+                fallbackReason = (err.code || 'unknown').toLowerCase();
+              } else {
+                throw err;
+              }
+            }
+          }
         }
 
-        const tmpBase = path.join(os.tmpdir(), `mddl-${uuid()}`);
-        const downloadTemplate = `${tmpBase}.%(ext)s`;
-        await ytdlp.downloadAudio(search.url, downloadTemplate, { signal });
+        let sourceFile;
+        let bitrateKbps;
+        let sourceCodec;
+        let search = null;
 
-        const sourceFile = await findDownloadedFile(tmpBase);
-        const bitrateKbps = await probeBitrateKbps(sourceFile);
+        if (usedSpotifyDirect) {
+          sourceFile = spotifyDirectMeta.outputPath;
+          bitrateKbps = spotifyDirectMeta.sourceBitrateKbps;
+          sourceCodec = spotifyDirectMeta.sourceCodec;
+        } else {
+          search = await ytdlp.searchYouTubeForTrack(
+            { artist: track.artist, title: track.name },
+            { signal }
+          );
+          if (!search) {
+            onEvent?.({ type: 'not_found', trackIdx: idx, reason: 'no youtube result' });
+            failed.push({ track, reason: 'not_found' });
+            continue;
+          }
+
+          const tmpBase = path.join(os.tmpdir(), `mddl-${uuid()}`);
+          const downloadTemplate = `${tmpBase}.%(ext)s`;
+          await ytdlp.downloadAudio(search.url, downloadTemplate, { signal });
+
+          sourceFile = await findDownloadedFile(tmpBase);
+          bitrateKbps = await probeBitrateKbps(sourceFile);
+          sourceCodec = 'opus';
+        }
 
         const { cleanTitle, mixType } = parseMixType(track.name);
 
@@ -88,6 +140,15 @@ function createPipeline(deps) {
 
         await convertToMp3(sourceFile, finalPath, { bitrateKbps, signal });
 
+        const provenance = buildProvenanceComment({
+          source: usedSpotifyDirect ? 'spotify-direct' : (platform === 'soundcloud' ? 'soundcloud' : 'youtube'),
+          sourceCodec,
+          sourceBitrateKbps: bitrateKbps,
+          finalBitrateKbps: bitrateKbps,
+          fallbackReason,
+          plan: spotifyDirectMeta?.plan,
+        });
+
         await writeTags(finalPath, {
           title: cleanTitle,
           subtitle: mixType || '',
@@ -98,14 +159,15 @@ function createPipeline(deps) {
           publisher: enriched.label,
           genre: enriched.genre,
           isrc: enriched.isrc,
-          comment: `Source: ${search.title} → MP3 ${bitrateKbps}kbps${enriched.mbid ? ` | MB: ${enriched.mbid}` : ''}`,
+          comment: provenance,
         });
 
         await fsp.unlink(sourceFile).catch(() => {});
         await library.register(playlistHash, trackHash);
-        ok.push(track);
+        ok.push(okEntry(track, usedSpotifyDirect ? 'spotify-direct' : 'youtube', fallbackReason));
         onEvent?.({ type: 'done', trackIdx: idx });
       } catch (err) {
+        if (signal?.aborted) throw err;
         onEvent?.({ type: 'not_found', trackIdx: idx, reason: err.message });
         failed.push({ track, reason: err.message });
       }
@@ -121,7 +183,7 @@ async function findDownloadedFile(tmpBase) {
   const dir = path.dirname(tmpBase);
   const prefix = path.basename(tmpBase);
   const entries = await fsp.readdir(dir);
-  const match = entries.find(e => e.startsWith(prefix));
+  const match = entries.find((e) => e.startsWith(prefix));
   if (!match) throw new Error(`download output not found for ${tmpBase}`);
   return path.join(dir, match);
 }

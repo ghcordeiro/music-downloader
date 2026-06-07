@@ -62,6 +62,7 @@ function createSpotifyClient({ clientId, clientSecret }) {
     const t = item.track || item;
     if (!t) return null;
     return {
+      spotifyId: t.id || '',
       name: t.name,
       artist: (t.artists || []).map(a => a.name).join(', '),
       durationSec: Math.floor((t.duration_ms || 0) / 1000),

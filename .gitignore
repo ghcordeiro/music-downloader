@@ -7,3 +7,4 @@ binaries/*/
 !binaries/.gitkeep
 main/spotify-creds.js
 dist/
+spike/

@@ -30,7 +30,14 @@ async function triggerOAuthFlow() {
   const result = await window.api.spotifyAccount.connect();
   dialog.close();
   if (!result.ok) {
-    alert(result.userMessage || 'Falha ao conectar Spotify.');
+    const msg = result.userMessage || 'Falha ao conectar Spotify.';
+    if (result.code === 'UNEXPECTED' && result.reference) {
+      window.dispatchEvent(new CustomEvent('app:tier3', {
+        detail: { userMessage: msg, reference: result.reference },
+      }));
+    } else {
+      alert(msg);
+    }
   }
   await refreshSpotifyAuthBanner();
 }

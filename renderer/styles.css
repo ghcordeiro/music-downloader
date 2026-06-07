@@ -41,7 +41,10 @@ button#previewCancel, button#downloadCancel, button#openFolder, button#errorRetr
 #trackList li { padding: 4px 0; display: flex; gap: 8px; }
 #trackList .num { color: #888; width: 32px; }
 #trackList .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#trackList .status { width: 18px; text-align: center; }
+#trackList .source { font-size: 11px; color: #888; white-space: nowrap; min-width: 120px; text-align: right; }
+#trackList .source.spotify { color: #1c7c3f; font-weight: 500; }
+#trackList .source.youtube { color: #b35c1e; }
+#trackList .status { width: 18px; text-align: center; flex-shrink: 0; }
 .state-done #summary { padding: 16px; background: #f5f5f5; border-radius: 6px; text-align: center; }
 .state-error #errorMessage { padding: 16px; background: #fff4f1; color: #b03a1f; border-radius: 6px; }
 .folder-row { padding: 10px; background: #f5f5f5; border-radius: 6px; margin: 10px 0; }
@@ -59,6 +62,8 @@ dialog#settingsDialog::backdrop { background: rgba(0, 0, 0, 0.2); }
 .settings-row span { flex: 1; font-size: 12px; color: #222; }
 dialog#tier3Dialog { border: 1px solid #f0a; border-radius: 8px; padding: 18px; min-width: 360px; }
 dialog#tier3Dialog code { background: #f3f3f3; padding: 4px 8px; border-radius: 4px; font-family: ui-monospace, monospace; }
+[hidden] { display: none !important; }
+
 .auth-banner {
   background: #e8f7ed; border: 1px solid #b9e1c8; border-radius: 6px;
   padding: 10px 14px; margin-bottom: 12px; display: flex; gap: 10px;

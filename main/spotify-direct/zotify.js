@@ -35,6 +35,25 @@ class ZotifyBinaryMissing extends Error {
 class ZotifyUnrecognizedError extends Error {
   constructor(stderr) { super(`zotify failed: ${stderr}`); this.code = 'ZOTIFY_UNRECOGNIZED'; }
 }
+class ZotifyTimeoutError extends Error {
+  constructor() { super('zotify timed out'); this.code = 'ZOTIFY_TIMEOUT'; }
+}
+class CredentialsBridgeError extends Error {
+  constructor(detail) {
+    super(`credentials bridge failed: ${detail}`);
+    this.code = 'CREDENTIALS_BRIDGE_FAILED';
+  }
+}
+
+function spawnEnv() {
+  const env = { ...process.env };
+  for (const key of ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']) {
+    delete env[key];
+  }
+  env.NO_PROXY = '*';
+  env.PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = 'python';
+  return env;
+}
 
 function bridgeScriptPath() {
   return path.join(__dirname, 'credentials-bridge.py');
@@ -74,13 +93,13 @@ async function writeCredentialsFile({ accessToken, refreshToken, expiresIn, clie
       refreshToken,
       String(expiresIn || 3600),
       credPath,
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    ], { stdio: ['ignore', 'pipe', 'pipe'], env: spawnEnv() });
     let stderr = '';
     child.stderr.on('data', (b) => { stderr += b.toString(); });
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`credentials bridge failed (${code}): ${stderr.trim()}`));
+      else reject(new CredentialsBridgeError(stderr.trim() || `exit ${code}`));
     });
   });
 }
@@ -103,21 +122,29 @@ async function downloadTrack({
   outputPath,
   signal,
   binaryPath,
+  credPath: suppliedCredPath,
   _spawn = spawn,
 }) {
-  const credPath = path.join(os.tmpdir(), `mdzcred-${Date.now()}.json`);
-  await writeCredentialsFile({
-    accessToken,
-    refreshToken,
-    expiresIn,
-    clientId,
-    credPath,
-    _spawn,
-  });
+  let credPath = suppliedCredPath;
+  let ownsCred = false;
+  if (!credPath) {
+    credPath = path.join(os.tmpdir(), `mdzcred-${Date.now()}.json`);
+    ownsCred = true;
+    await writeCredentialsFile({
+      accessToken,
+      refreshToken,
+      expiresIn,
+      clientId,
+      credPath,
+      _spawn,
+    });
+  }
 
   const exe = binaryPath || resolveZotifyBinary();
   const outDir = path.dirname(outputPath);
   const outName = path.basename(outputPath, path.extname(outputPath));
+
+  const ZOTIFY_TIMEOUT_MS = 180_000;
 
   return new Promise((resolve, reject) => {
     const child = _spawn(exe, [
@@ -125,30 +152,50 @@ async function downloadTrack({
       '--root-path', outDir,
       '--output', `${outName}.{ext}`,
       '--download-format', 'vorbis',
-      '--print-download-progress', 'False',
-      '--print-errors', 'True',
+      '--download-quality', 'very_high',
       trackUrl,
-    ], { signal });
+    ], { signal, env: spawnEnv() });
 
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    const finish = (fn) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      finish(() => reject(new ZotifyTimeoutError()));
+    }, ZOTIFY_TIMEOUT_MS);
+
     child.stdout.on('data', (b) => { stdout += b.toString(); });
     child.stderr.on('data', (b) => { stderr += b.toString(); });
     child.on('error', (err) => {
-      if (err.code === 'ENOENT') reject(new ZotifyBinaryMissing());
-      else reject(err);
+      finish(() => {
+        if (err.code === 'ENOENT') reject(new ZotifyBinaryMissing());
+        else reject(err);
+      });
     });
     child.on('close', async (code) => {
-      await fsp.unlink(credPath).catch(() => {});
-      if (code === 0) {
-        const exists = await fsp.access(outputPath).then(() => true).catch(() => false);
-        const finalPath = exists ? outputPath : await findOutputFile(outDir, outName);
-        const codec = (stdout.match(/vorbis|opus|aac/i) || ['vorbis'])[0].toLowerCase();
-        const bitrate = parseInt((stdout.match(/(\d{2,3})\s*kbps/i) || [])[1] || '320', 10);
-        resolve({ ok: true, outputPath: finalPath, sourceCodec: codec, sourceBitrateKbps: bitrate });
-      } else {
-        reject(classifyStderr(stderr));
-      }
+      if (ownsCred) await fsp.unlink(credPath).catch(() => {});
+      finish(async () => {
+        if (code === 0) {
+          try {
+            const exists = await fsp.access(outputPath).then(() => true).catch(() => false);
+            const finalPath = exists ? outputPath : await findOutputFile(outDir, outName);
+            const codec = (stdout.match(/vorbis|opus|aac/i) || ['vorbis'])[0].toLowerCase();
+            const bitrate = parseInt((stdout.match(/(\d{2,3})\s*kbps/i) || [])[1] || '320', 10);
+            resolve({ ok: true, outputPath: finalPath, sourceCodec: codec, sourceBitrateKbps: bitrate });
+          } catch (err) {
+            reject(Object.assign(err, { code: 'ZOTIFY_UNRECOGNIZED' }));
+          }
+        } else {
+          reject(classifyStderr(stderr));
+        }
+      });
     });
   });
 }
@@ -169,4 +216,6 @@ module.exports = {
   PremiumRequired,
   ZotifyBinaryMissing,
   ZotifyUnrecognizedError,
+  ZotifyTimeoutError,
+  CredentialsBridgeError,
 };

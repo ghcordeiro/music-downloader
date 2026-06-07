@@ -44,7 +44,7 @@ describe('pipeline.run — single track happy path', () => {
       onEvent: (e) => events.push(e),
     });
 
-    expect(events.map(e => e.type)).toEqual(['started', 'done']);
+    expect(events.map(e => e.type)).toEqual(['started', 'sourcing', 'done']);
     expect(calls).toEqual({ search: 1, download: 1, convert: 1, tag: 1 });
     expect(fs.existsSync(path.join(outDir, 'PL', 'A - X.mp3'))).toBe(true);
   });
@@ -77,7 +77,7 @@ describe('pipeline.run — failures', () => {
       onEvent: (e) => events.push(e),
     });
 
-    expect(events.map(e => e.type)).toEqual(['started', 'not_found', 'started', 'done']);
+    expect(events.map(e => e.type)).toEqual(['started', 'sourcing', 'not_found', 'started', 'sourcing', 'done']);
     expect(result.failed).toHaveLength(1);
     expect(result.ok).toHaveLength(1);
   });

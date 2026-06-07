@@ -16,7 +16,7 @@ function sanitizeFilename(name) {
     : cleaned;
 }
 
-function getBinaryRoot(opts) {
+function getBinaryRoot(opts = {}) {
   if (opts.root) return opts.root;
   try {
     const { app } = require('electron');

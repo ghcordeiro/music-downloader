@@ -1,4 +1,6 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, safeStorage } = require('electron');
+const { runSpotifyBridgeTest } = require('./run-spotify-bridge-test.js');
+const { runSpotifyDownloadTest } = require('./run-spotify-download-test.js');
 const path = require('node:path');
 const fs = require('node:fs');
 try {
@@ -30,6 +32,22 @@ function createWindow(config) {
 }
 
 app.whenReady().then(() => {
+  if (process.env.TEST_BRIDGE) {
+    return runSpotifyBridgeTest({
+      userDataDir: app.getPath('userData'),
+      safeStorage,
+      exit: (code) => app.exit(code),
+    });
+  }
+
+  if (process.env.TEST_DOWNLOAD) {
+    return runSpotifyDownloadTest({
+      userDataDir: app.getPath('userData'),
+      safeStorage,
+      exit: (code) => app.exit(code),
+    });
+  }
+
   const config = createConfig(app.getPath('userData'));
   const window = createWindow(config);
   registerIpc({ config, window, userDataDir: app.getPath('userData') });
@@ -40,5 +58,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.env.TEST_BRIDGE || process.env.TEST_DOWNLOAD) app.quit();
+  else if (process.platform !== 'darwin') app.quit();
 });

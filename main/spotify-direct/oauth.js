@@ -55,7 +55,7 @@ async function fetchUserProfile({ accessToken }) {
   return { email: r.data.email, product: r.data.product, id: r.data.id };
 }
 
-async function createLoopbackCallback({ timeoutMs = 5 * 60 * 1000 } = {}) {
+async function createLoopbackCallback({ timeoutMs = 5 * 60 * 1000, port = 0, host = '127.0.0.1' } = {}) {
   let resolveFn;
   let rejectFn;
   const promise = new Promise((res, rej) => { resolveFn = res; rejectFn = rej; });
@@ -86,11 +86,12 @@ async function createLoopbackCallback({ timeoutMs = 5 * 60 * 1000 } = {}) {
     resolveFn({ code, state });
   });
 
+  const listenPort = port > 0 ? port : 0;
   await new Promise((res, rej) => {
-    server.listen(0, '127.0.0.1', (err) => (err ? rej(err) : res()));
+    server.listen(listenPort, host, (err) => (err ? rej(err) : res()));
   });
 
-  const port = server.address().port;
+  const boundPort = server.address().port;
 
   const timer = setTimeout(() => {
     rejectFn(new Error('oauth callback timeout'));
@@ -98,7 +99,7 @@ async function createLoopbackCallback({ timeoutMs = 5 * 60 * 1000 } = {}) {
   }, timeoutMs);
 
   return {
-    port,
+    port: boundPort,
     promise: promise.finally(() => { clearTimeout(timer); server.close(); }),
     cleanup: () => { clearTimeout(timer); server.close(); },
   };

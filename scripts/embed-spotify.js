@@ -45,6 +45,8 @@ module.exports = {
   clientId: ${JSON.stringify(env.SPOTIFY_CLIENT_ID)},
   clientSecret: ${JSON.stringify(env.SPOTIFY_CLIENT_SECRET)},
   oauthClientId: ${JSON.stringify(env.SPOTIFY_OAUTH_CLIENT_ID)},
+  oauthRedirectUri: ${JSON.stringify(env.SPOTIFY_OAUTH_REDIRECT_URI || '')},
+  oauthCallbackPort: ${JSON.stringify(env.SPOTIFY_OAUTH_CALLBACK_PORT || '5982')},
 };
 `;
 fs.writeFileSync(path.resolve(__dirname, '..', 'main', 'spotify-creds.js'), out, 'utf8');

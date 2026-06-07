@@ -34,21 +34,23 @@ function makeLogger(userDataDir) {
 }
 
 function registerIpc({ config, window, userDataDir }) {
-  let creds;
-  try { creds = require('./spotify-creds.js'); }
-  catch {
-    creds = {
-      clientId: process.env.SPOTIFY_CLIENT_ID,
-      clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-      oauthClientId: process.env.SPOTIFY_OAUTH_CLIENT_ID,
-    };
-  }
+  const { loadSpotifyCreds } = require('./load-spotify-creds.js');
+  const creds = loadSpotifyCreds();
   const spotifyClient = createSpotifyClient(creds);
 
   const spotifyDirectStore = createSpotifyAuthStore(userDataDir, safeStorage);
   const spotifyDirect = createSpotifyDirect({
     store: spotifyDirectStore,
     clientIdProvider: () => creds.oauthClientId || creds.clientId,
+    redirectUriProvider: () => creds.oauthRedirectUri || process.env.SPOTIFY_OAUTH_REDIRECT_URI || null,
+    callbackPortProvider: () => {
+      // Fixed loopback port (default 8888). Register http://127.0.0.1:8888/callback
+      // in the Spotify dashboard. A fixed port matches deterministically; Spotify's
+      // dynamic-port loopback match proved unreliable ("Not matching configuration").
+      const raw = creds.oauthCallbackPort || process.env.SPOTIFY_OAUTH_CALLBACK_PORT || '8888';
+      const n = parseInt(raw, 10);
+      return Number.isFinite(n) && n > 0 ? n : 8888;
+    },
   });
 
   spotifyDirect.on('status-changed', (payload) => {

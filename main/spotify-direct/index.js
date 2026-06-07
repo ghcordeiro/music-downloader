@@ -1,13 +1,56 @@
 const { EventEmitter } = require('node:events');
+const path = require('node:path');
+const os = require('node:os');
+const fsp = require('node:fs/promises');
 const { shell } = require('electron');
 const { generateCodeVerifier, codeChallenge } = require('./pkce.js');
 const { buildAuthorizationUrl } = require('./oauth-urls.js');
 const oauth = require('./oauth.js');
 const zotify = require('./zotify.js');
 
-function createSpotifyDirect({ store, clientIdProvider }) {
+function createSpotifyDirect({ store, clientIdProvider, redirectUriProvider, callbackPortProvider }) {
   const ee = new EventEmitter();
   let access = { token: null, refreshToken: null, expiresAt: 0 };
+  let cachedCred = null;
+  let bridgeFailed = false;
+
+  async function clearCachedCred() {
+    if (cachedCred?.path) await fsp.unlink(cachedCred.path).catch(() => {});
+    cachedCred = null;
+  }
+
+  async function ensureCredPath(tokens) {
+    if (bridgeFailed) {
+      const err = new zotify.CredentialsBridgeError('session bridge unavailable');
+      throw err;
+    }
+
+    const stale = !cachedCred
+      || cachedCred.accessToken !== tokens.accessToken
+      || Date.now() > cachedCred.expiresAt - 5 * 60 * 1000;
+    if (!stale) return cachedCred.path;
+
+    await clearCachedCred();
+    const credPath = path.join(os.tmpdir(), `mdzcred-session-${Date.now()}.json`);
+    try {
+      await zotify.writeCredentialsFile({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresIn: tokens.expiresIn,
+        clientId: clientIdProvider(),
+        credPath,
+      });
+    } catch (err) {
+      bridgeFailed = true;
+      throw err;
+    }
+    cachedCred = {
+      path: credPath,
+      accessToken: tokens.accessToken,
+      expiresAt: Date.now() + tokens.expiresIn * 1000,
+    };
+    return credPath;
+  }
 
   async function _refreshIfNeeded() {
     if (access.token && Date.now() < access.expiresAt - 5 * 60 * 1000) {
@@ -65,8 +108,27 @@ function createSpotifyDirect({ store, clientIdProvider }) {
       const challenge = codeChallenge(verifier);
       const state = generateCodeVerifier().slice(0, 16);
 
-      const cb = await oauth.createLoopbackCallback();
-      const redirectUri = `http://127.0.0.1:${cb.port}/callback`;
+      const fixedRedirect = redirectUriProvider?.() || null;
+      const callbackPort = callbackPortProvider?.() || 0;
+
+      // Three modes:
+      // 1. fixedRedirect (HTTPS via tunnel/own server) — legacy.
+      // 2. callbackPort set, no fixedRedirect — loopback on a FIXED port; register
+      //    http://127.0.0.1:PORT/callback in the Spotify dashboard. Deterministic match.
+      // 3. nothing set — loopback on a dynamic port; register http://127.0.0.1/callback
+      //    (no port) in the dashboard. Spotify's dynamic-port match can be unreliable.
+      let cb;
+      let redirectUri;
+      if (fixedRedirect) {
+        cb = await oauth.createLoopbackCallback({ port: callbackPort });
+        redirectUri = fixedRedirect;
+      } else if (callbackPort > 0) {
+        cb = await oauth.createLoopbackCallback({ port: callbackPort });
+        redirectUri = `http://127.0.0.1:${callbackPort}/callback`;
+      } else {
+        cb = await oauth.createLoopbackCallback({});
+        redirectUri = `http://127.0.0.1:${cb.port}/callback`;
+      }
       const url = buildAuthorizationUrl({
         clientId: clientIdProvider(),
         redirectUri,
@@ -109,18 +171,25 @@ function createSpotifyDirect({ store, clientIdProvider }) {
         savedAt: new Date().toISOString(),
       });
 
+      bridgeFailed = false;
+      await clearCachedCred();
+
+      // Bridge is validated lazily on first download (librespot can fail independently of OAuth).
       ee.emit('status-changed', { connected: true, email: me.email, plan: me.product });
       return { connected: true, email: me.email, plan: me.product };
     },
 
     async disconnect() {
       await store.clear();
+      await clearCachedCred();
+      bridgeFailed = false;
       access = { token: null, refreshToken: null, expiresAt: 0 };
       ee.emit('status-changed', { connected: false });
     },
 
     async downloadTrack(spotifyTrackId, outputPath, { signal } = {}) {
       const tokens = await _refreshIfNeeded();
+      const credPath = await ensureCredPath(tokens);
       const trackUrl = `https://open.spotify.com/track/${spotifyTrackId}`;
       try {
         return await zotify.downloadTrack({
@@ -130,6 +199,7 @@ function createSpotifyDirect({ store, clientIdProvider }) {
           clientId: clientIdProvider(),
           trackUrl,
           outputPath,
+          credPath,
           signal,
         });
       } catch (err) {

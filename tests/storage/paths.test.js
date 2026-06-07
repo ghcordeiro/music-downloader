@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeFilename, resolveBinary, truncateForOS } from '../../main/storage/paths.js';
+import { sanitizeFilename, resolveBinary, truncateForOS, getBinaryRoot } from '../../main/storage/paths.js';
 import path from 'node:path';
 
 describe('sanitizeFilename', () => {
@@ -21,6 +21,13 @@ describe('sanitizeFilename', () => {
     const long = 'a'.repeat(300);
     const result = sanitizeFilename(long);
     expect(result.length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe('getBinaryRoot', () => {
+  it('works when called without opts (zotify resolveZotifyBinary)', () => {
+    expect(() => getBinaryRoot()).not.toThrow();
+    expect(getBinaryRoot()).toContain('apple-playlist-downloader');
   });
 });
 

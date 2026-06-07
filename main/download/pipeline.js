@@ -10,6 +10,9 @@ const RECOVERABLE_SPOTIFY = new Set([
   'REGION_LOCKED',
   'PREMIUM_REQUIRED',
   'ZOTIFY_UNRECOGNIZED',
+  'ZOTIFY_BINARY_MISSING',
+  'CREDENTIALS_BRIDGE_FAILED',
+  'ZOTIFY_TIMEOUT',
   'AUTH_EXPIRED',
   'NOT_CONNECTED',
 ]);
@@ -20,6 +23,13 @@ function uuid() {
 
 function okEntry(track, via, fallbackReason = null) {
   return { track, via, fallbackReason };
+}
+
+function sourceLabel(via, bitrateKbps, fallbackReason) {
+  if (via === 'spotify-direct') return `${bitrateKbps || 320} kbps · Spotify`;
+  const kbps = bitrateKbps || 128;
+  if (fallbackReason) return `~${kbps} kbps · YouTube (fallback)`;
+  return `~${kbps} kbps · YouTube`;
 }
 
 function createPipeline(deps) {
@@ -59,6 +69,12 @@ function createPipeline(deps) {
           try { status = await spotifyDirect.getStatus(); } catch { status = { connected: false }; }
 
           if (status.connected) {
+            onEvent?.({
+              type: 'sourcing',
+              trackIdx: idx,
+              via: 'spotify-direct',
+              label: sourceLabel('spotify-direct'),
+            });
             const sdOutputPath = path.join(os.tmpdir(), `mdsd-${uuid()}.ogg`);
             try {
               const sd = await spotifyDirect.downloadTrack(track.spotifyId, sdOutputPath, { signal });
@@ -85,6 +101,13 @@ function createPipeline(deps) {
           bitrateKbps = spotifyDirectMeta.sourceBitrateKbps;
           sourceCodec = spotifyDirectMeta.sourceCodec;
         } else {
+          onEvent?.({
+            type: 'sourcing',
+            trackIdx: idx,
+            via: 'youtube',
+            label: sourceLabel('youtube', null, fallbackReason),
+            fallbackReason,
+          });
           search = await ytdlp.searchYouTubeForTrack(
             { artist: track.artist, title: track.name },
             { signal }
@@ -164,8 +187,16 @@ function createPipeline(deps) {
 
         await fsp.unlink(sourceFile).catch(() => {});
         await library.register(playlistHash, trackHash);
-        ok.push(okEntry(track, usedSpotifyDirect ? 'spotify-direct' : 'youtube', fallbackReason));
-        onEvent?.({ type: 'done', trackIdx: idx });
+        const via = usedSpotifyDirect ? 'spotify-direct' : 'youtube';
+        ok.push(okEntry(track, via, fallbackReason));
+        onEvent?.({
+          type: 'done',
+          trackIdx: idx,
+          via,
+          bitrateKbps,
+          label: sourceLabel(via, bitrateKbps, fallbackReason),
+          fallbackReason,
+        });
       } catch (err) {
         if (signal?.aborted) throw err;
         onEvent?.({ type: 'not_found', trackIdx: idx, reason: err.message });

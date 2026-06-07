@@ -18,7 +18,10 @@ const YT_DLP = {
 const FFMPEG = {
   'mac-arm64': 'https://www.osxexperts.net/ffmpeg711arm.zip',
   'mac-x64':   'https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip',
-  'win-x64':   'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
+  // Use the literal `latest` tag (which BtbN actively rotates and keeps
+  // assets-complete) instead of GitHub's `releases/latest` redirect, which
+  // can briefly resolve to an autobuild that hasn't uploaded all assets yet.
+  'win-x64':   'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip',
 };
 
 const FFPROBE = {

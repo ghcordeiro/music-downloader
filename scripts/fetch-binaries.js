@@ -144,6 +144,106 @@ function hostMatchesTarget(target) {
   return false;
 }
 
+function pythonMinor(py) {
+  const r = spawnSync(py, ['-c', 'import sys; print(sys.version_info.minor)'], { encoding: 'utf8' });
+  if (r.status !== 0) return null;
+  const n = parseInt(r.stdout.trim(), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+function resolveSystemPython() {
+  if (process.platform === 'win32') return 'python';
+
+  const candidates = [
+    '/opt/homebrew/opt/python@3.12/bin/python3.12',
+    '/opt/homebrew/bin/python3.12',
+    '/usr/local/bin/python3.12',
+    'python3.12',
+    'python3.11',
+    'python3.10',
+  ];
+  for (const py of candidates) {
+    const exists = py.startsWith('/')
+      ? fs.existsSync(py)
+      : spawnSync('which', [py], { encoding: 'utf8' }).status === 0;
+    if (!exists) continue;
+    const minor = pythonMinor(py);
+    if (minor !== null && minor >= 10 && minor <= 12) return py;
+  }
+
+  console.log('Python 3.10–3.12 not found; installing python@3.12 via Homebrew...');
+  const brew = spawnSync('brew', ['install', 'python@3.12'], { stdio: 'inherit' });
+  if (brew.status !== 0) throw new Error('failed to install python@3.12 (brew install python@3.12)');
+  const brewed = '/opt/homebrew/opt/python@3.12/bin/python3.12';
+  if (!fs.existsSync(brewed)) throw new Error(`python@3.12 missing at ${brewed}`);
+  return brewed;
+}
+
+// librespot-python's ConnectionHolder.read() uses socket.recv(length), which
+// can return fewer bytes than requested. During Session.connect() this truncates
+// the APResponseMessage frame and raises "DecodeError: Wrong wire type in tag",
+// causing intermittent Spotify download failures (fallback to YouTube ~128kbps).
+// Patch read() to loop until the full length is read. Idempotent.
+function patchLibrespotShortRead(venvDir, target) {
+  const libDir = path.join(venvDir, 'lib');
+  let coreFile = null;
+  try {
+    for (const entry of fs.readdirSync(libDir)) {
+      const candidate = path.join(libDir, entry, 'site-packages', 'librespot', 'core.py');
+      if (fs.existsSync(candidate)) { coreFile = candidate; break; }
+    }
+  } catch { /* fall through */ }
+  if (target === 'win-x64' && !coreFile) {
+    const candidate = path.join(venvDir, 'Lib', 'site-packages', 'librespot', 'core.py');
+    if (fs.existsSync(candidate)) coreFile = candidate;
+  }
+  if (!coreFile) {
+    console.warn('patchLibrespotShortRead: core.py not found; skipping (downloads may be flaky)');
+    return;
+  }
+
+  const src = fs.readFileSync(coreFile, 'utf8');
+  if (src.includes('PATCH: socket.recv may return fewer bytes')) {
+    console.log('librespot short-read patch already applied');
+    return;
+  }
+
+  const needle = '        def read(self, length: int) -> bytes:\n'
+    + '            """Read data from socket\n\n'
+    + '            :param length: int:\n'
+    + '            :returns: Bytes data from socket\n\n'
+    + '            """\n'
+    + '            return self.__socket.recv(length)\n';
+
+  const replacement = '        def read(self, length: int) -> bytes:\n'
+    + '            """Read data from socket\n\n'
+    + '            :param length: int:\n'
+    + '            :returns: Bytes data from socket\n\n'
+    + '            """\n'
+    + '            # PATCH: socket.recv may return fewer bytes than requested; loop\n'
+    + '            # until the full length is read to avoid truncated protobuf frames\n'
+    + '            # (DecodeError: Wrong wire type in tag) during connect().\n'
+    + '            if length <= 0:\n'
+    + '                return b""\n'
+    + '            buffer = bytearray()\n'
+    + '            remaining = length\n'
+    + '            while remaining > 0:\n'
+    + '                chunk = self.__socket.recv(remaining)\n'
+    + '                if chunk == b"":\n'
+    + '                    raise ConnectionError("EOF")\n'
+    + '                buffer.extend(chunk)\n'
+    + '                remaining -= len(chunk)\n'
+    + '            return bytes(buffer)\n';
+
+  if (!src.includes(needle)) {
+    console.warn('patchLibrespotShortRead: read() signature not found; skipping (librespot may have changed)');
+    return;
+  }
+
+  fs.writeFileSync(coreFile, src.replace(needle, replacement), 'utf8');
+  console.log('applied librespot short-read patch to', path.relative(BIN, coreFile));
+}
+
 async function fetchZotify(target) {
   if (!hostMatchesTarget(target)) {
     console.warn(`skipping zotify for ${target} (must build on matching host OS/arch)`);
@@ -155,26 +255,52 @@ async function fetchZotify(target) {
   const venvDir = path.join(dir, 'zotify-venv');
   const pythonBin = path.join(venvDir, target === 'win-x64' ? 'Scripts/python.exe' : 'bin/python3');
   const launcher = path.join(dir, target === 'win-x64' ? 'zotify.bat' : 'zotify');
+  const marker = path.join(venvDir, '.python-source');
+  const systemPy = resolveSystemPython();
+  const venvMinor = fs.existsSync(pythonBin) ? pythonMinor(pythonBin) : null;
+  const markerPy = fs.existsSync(marker) ? fs.readFileSync(marker, 'utf8').trim() : '';
+  const needsRecreate = !fs.existsSync(pythonBin)
+    || markerPy !== systemPy
+    || venvMinor === null
+    || venvMinor > 12;
 
-  if (!fs.existsSync(pythonBin)) {
-    console.log(`creating zotify venv for ${target}`);
-    const py = process.platform === 'win32' ? 'python' : 'python3';
-    const r = spawnSync(py, ['-m', 'venv', venvDir], { stdio: 'inherit' });
-    if (r.status !== 0) throw new Error('failed to create zotify venv');
-    const pip = spawnSync(pythonBin, ['-m', 'pip', 'install', '--upgrade', 'pip'], { stdio: 'inherit' });
-    if (pip.status !== 0) throw new Error('failed to upgrade pip in zotify venv');
-    const install = spawnSync(
-      pythonBin,
-      ['-m', 'pip', 'install', 'git+https://github.com/zotify-dev/zotify.git'],
-      { stdio: 'inherit' },
-    );
-    if (install.status !== 0) throw new Error('failed to pip install zotify');
+  if (needsRecreate && fs.existsSync(venvDir)) {
+    console.log(`recreating zotify venv for ${target} (need Python 3.10–3.12, not 3.14)`);
+    fs.rmSync(venvDir, { recursive: true, force: true });
   }
 
+  if (!fs.existsSync(pythonBin)) {
+    console.log(`creating zotify venv for ${target} with ${systemPy}`);
+    const r = spawnSync(systemPy, ['-m', 'venv', venvDir], { stdio: 'inherit' });
+    if (r.status !== 0) throw new Error('failed to create zotify venv');
+    fs.writeFileSync(marker, systemPy);
+    const pip = spawnSync(pythonBin, ['-m', 'pip', 'install', '--upgrade', 'pip'], { stdio: 'inherit' });
+    if (pip.status !== 0) throw new Error('failed to upgrade pip in zotify venv');
+  }
+
+  // Maintained fork: Googolplexed0/zotify + librespot-python (Login5 / metadata fixes).
+  console.log(`installing Googolplexed0 zotify for ${target}`);
+  const install = spawnSync(
+    pythonBin,
+    ['-m', 'pip', 'install', '--upgrade', '--force-reinstall', 'git+https://github.com/Googolplexed0/zotify.git'],
+    { stdio: 'inherit' },
+  );
+  if (install.status !== 0) throw new Error('failed to pip install Googolplexed0 zotify');
+
+  patchLibrespotShortRead(venvDir, target);
+
   if (target === 'win-x64') {
-    fs.writeFileSync(launcher, `@echo off\r\n"${pythonBin}" -m zotify %*\r\n`, 'utf8');
+    fs.writeFileSync(
+      launcher,
+      `@echo off\r\nset PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python\r\n"${pythonBin}" -m zotify %*\r\n`,
+      'utf8',
+    );
   } else {
-    fs.writeFileSync(launcher, `#!/bin/sh\nexec "${pythonBin}" -m zotify "$@"\n`, 'utf8');
+    fs.writeFileSync(
+      launcher,
+      `#!/bin/sh\nexport PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python\nexec "${pythonBin}" -m zotify "$@"\n`,
+      'utf8',
+    );
     fs.chmodSync(launcher, 0o755);
   }
   console.log(`zotify launcher ready for ${target}`);
